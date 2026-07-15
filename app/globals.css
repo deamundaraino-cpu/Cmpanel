@@ -1,26 +1,124 @@
 @import "tailwindcss";
 
+/* ————— Tokens de tema OSCURO (por defecto): re-mapean la paleta zinc ————— */
+@theme {
+  --color-zinc-950: #0a0a0f;
+  --color-zinc-900: #12121a;
+  --color-zinc-800: #232332;
+  --color-zinc-700: #32324a;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --accent: #6366f1;
+  --chart-grid: rgba(255, 255, 255, 0.09);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* ————— Tema CLARO: escala zinc invertida + acentos oscurecidos para contraste ————— */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --chart-grid: rgba(0, 0, 0, 0.1);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* superficies */
+  --color-zinc-950: #f2f3f7;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e3e4ec;
+  --color-zinc-700: #cfd0dc;
+
+  /* escala de texto invertida */
+  --color-zinc-100: #16161d;
+  --color-zinc-200: #26262f;
+  --color-zinc-300: #3b3b47;
+  --color-zinc-400: #565664;
+  --color-zinc-500: #6e6e7c;
+  --color-zinc-600: #8f8f9c;
+
+  /* acentos -200/-300/-400: versiones oscuras legibles sobre claro */
+  --color-indigo-200: #3730a3;
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-sky-300: #0369a1;
+  --color-violet-300: #6d28d9;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1100px 550px at 85% -10%, rgba(99, 102, 241, 0.09), transparent 60%),
+    radial-gradient(900px 500px at -15% 110%, rgba(56, 189, 248, 0.05), transparent 55%),
+    linear-gradient(180deg, #0c0c13 0%, #08080d 100%);
+  background-attachment: fixed;
+  color: #f4f4f5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(1100px 550px at 85% -10%, rgba(99, 102, 241, 0.07), transparent 60%),
+    radial-gradient(900px 500px at -15% 110%, rgba(56, 189, 248, 0.06), transparent 55%),
+    linear-gradient(180deg, #f7f8fb 0%, #eef0f5 100%);
+  color: #16161d;
+}
+
+/* Tailwind v4 pone cursor default en botones; los clicables deben invitar al clic */
+button:not(:disabled),
+[role="button"],
+select,
+label:has(input[type="file"]) {
+  cursor: pointer;
+}
+
+/* Foco visible para navegación con teclado */
+:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.75);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(99, 102, 241, 0.22);
+}
+
+/* Scrollbar discreto acorde al tema */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+:root[data-theme="light"] * {
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+:root[data-theme="light"] *::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
