@@ -4,6 +4,7 @@ import { getSql, CommentRow } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
 import { getSetting } from "@/lib/settings";
 import { buildBrandBrief } from "@/lib/brand";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 
 export const maxDuration = 120;
 
@@ -22,7 +23,7 @@ const PILAR_GUIDE: Record<Pilar, string> = {
 };
 
 async function tavilySearch(query: string): Promise<{ context: string; sources: string[] }> {
-  const key = await getSetting("tavily_api_key");
+  const key = process.env.TAVILY_API_KEY;
   if (!key) return { context: "", sources: [] };
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
@@ -44,13 +45,14 @@ async function tavilySearch(query: string): Promise<{ context: string; sources: 
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { pilar, source } = await req.json().catch(() => ({}));
     const targetPilar: Pilar | null = PILARES.includes(pilar) ? pilar : null;
     const sql = getSql();
-    const brief = await buildBrandBrief();
+    const brief = await buildBrandBrief(userId);
 
     let context = "";
     let sources: string[] = [];
@@ -60,7 +62,8 @@ export async function POST(req: NextRequest) {
       // Minería de comentarios reales: dolores y preguntas literales de la audiencia.
       const comments = await sql<(CommentRow & { caption: string | null })[]>`
         SELECT c.*, p.caption FROM comments c
-        LEFT JOIN posts p ON p.id = c.post_id
+        LEFT JOIN posts p ON p.user_id = c.user_id AND p.id = c.post_id
+        WHERE c.user_id = ${userId}
         ORDER BY c.like_count DESC, c.timestamp DESC
         LIMIT 60
       `;
@@ -79,12 +82,16 @@ export async function POST(req: NextRequest) {
           .map((c) => `- "${(c.text || "").slice(0, 200)}"${c.caption ? ` (en post: ${c.caption.slice(0, 60)}…)` : ""}`)
           .join("\n");
     } else {
-      const niche = (await getSetting("brand_niche")) || "marca personal y negocios digitales";
+      const niche =
+        (await getSetting(userId, "brand_niche")) || "marca personal y negocios digitales";
       const query = `temas y preguntas en tendencia en redes sociales sobre ${niche} ${new Date().getFullYear()}`;
       const web = await tavilySearch(query);
       context = web.context;
       sources = web.sources;
     }
+
+    const quota = await consumeQuota(userId, "research");
+    if (!quota.ok) return quotaExceeded(quota);
 
     const pilarInstructions = targetPilar
       ? `Genera 6 ideas SOLO del pilar ${targetPilar.toUpperCase()}. Definición del pilar:\n${PILAR_GUIDE[targetPilar]}\nTodas las ideas deben cumplir el objetivo de ese pilar, sin mezclarse con los otros.`
@@ -105,8 +112,8 @@ export async function POST(req: NextRequest) {
         ? idea.pilar
         : targetPilar || "crecimiento";
       await sql`
-        INSERT INTO ideas (created_at, tema, angulo, formato, razon, fuentes, pilar)
-        VALUES (${now}, ${idea.tema}, ${idea.angulo}, ${idea.formato}, ${idea.razon},
+        INSERT INTO ideas (user_id, created_at, tema, angulo, formato, razon, fuentes, pilar)
+        VALUES (${userId}, ${now}, ${idea.tema}, ${idea.angulo}, ${idea.formato}, ${idea.razon},
           ${fromComments ? '["comentarios"]' : JSON.stringify(sources)}, ${ideaPilar})
       `;
     }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getSql, PostRow } from "@/lib/db";
 import { statsSummary } from "@/lib/scoring";
 import { getSetting } from "@/lib/settings";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import Sparkline from "@/components/Sparkline";
 import PageHeader from "@/components/PageHeader";
@@ -21,16 +23,18 @@ type Analysis = {
 };
 
 export default async function Dashboard() {
+  const { userId, onboarded } = await requireUser();
+  if (!onboarded) redirect("/onboarding");
   const sql = getSql();
-  const { posts, totalReach, avgEr } = await statsSummary();
+  const { posts, totalReach, avgEr } = await statsSummary(userId);
   const winners = posts.filter((p) => p.is_winner);
   const snapshots = await sql<{ date: string; followers_count: number }[]>`
-    SELECT * FROM account_snapshots ORDER BY date ASC
+    SELECT * FROM account_snapshots WHERE user_id = ${userId} ORDER BY date ASC
   `;
   const followers = snapshots.at(-1)?.followers_count || 0;
-  const username = await getSetting("ig_username");
+  const username = await getSetting(userId, "ig_username");
   const recs = await sql<{ created_at: string; content: string }[]>`
-    SELECT * FROM recommendations ORDER BY id DESC LIMIT 1
+    SELECT * FROM recommendations WHERE user_id = ${userId} ORDER BY id DESC LIMIT 1
   `;
   const lastRec = recs[0];
   const analysis: Analysis | null = lastRec ? JSON.parse(lastRec.content) : null;

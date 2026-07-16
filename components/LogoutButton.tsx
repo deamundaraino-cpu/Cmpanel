@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import Icon from "@/components/icons";
 
 export default function LogoutButton() {
@@ -8,7 +9,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={async () => {
-        await fetch("/api/auth/logout", { method: "POST" });
+        await getSupabaseBrowser().auth.signOut();
         router.push("/login");
         router.refresh();
       }}

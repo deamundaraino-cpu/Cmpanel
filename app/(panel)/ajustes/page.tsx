@@ -9,8 +9,9 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-        Conecta tu cuenta de Instagram, tu proveedor de IA y la búsqueda web.
-        Para la identidad, el cliente ideal y la estrategia de contenido, ve a{" "}
+        Conecta tu cuenta de Instagram y gestiona tus copias de seguridad. La
+        IA ya viene incluida. Para la identidad, el cliente ideal y la
+        estrategia de contenido, ve a{" "}
         <Link href="/marca" className="text-indigo-400 hover:text-indigo-300">
           🧠 Marca
         </Link>

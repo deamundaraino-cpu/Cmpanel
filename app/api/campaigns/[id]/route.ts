@@ -8,8 +8,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
     const body = await req.json();
@@ -20,7 +20,10 @@ export async function PATCH(
     const keys = Object.keys(patch);
     if (!keys.length) return fail(new Error("Nada que actualizar"), 400);
     const sql = getSql();
-    await sql`UPDATE campaigns SET ${sql(patch, ...keys)} WHERE id = ${Number(id)}`;
+    await sql`
+      UPDATE campaigns SET ${sql(patch, ...keys)}
+      WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+    `;
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);
@@ -31,12 +34,20 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const sql = getSql();
-  await sql`UPDATE posts SET campaign_id = NULL WHERE campaign_id = ${Number(id)}`;
-  await sql`UPDATE calendar_items SET campaign_id = NULL WHERE campaign_id = ${Number(id)}`;
-  await sql`DELETE FROM campaigns WHERE id = ${Number(id)}`;
+  await sql`
+    UPDATE posts SET campaign_id = NULL
+    WHERE user_id = ${auth.userId} AND campaign_id = ${Number(id)}
+  `;
+  await sql`
+    UPDATE calendar_items SET campaign_id = NULL
+    WHERE user_id = ${auth.userId} AND campaign_id = ${Number(id)}
+  `;
+  await sql`
+    DELETE FROM campaigns WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+  `;
   return NextResponse.json({ ok: true });
 }

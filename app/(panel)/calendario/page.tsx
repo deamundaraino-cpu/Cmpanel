@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSql, CalendarItemRow, CampaignRow } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import CalendarBoard from "@/components/CalendarBoard";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +21,15 @@ export default async function CalendarPage({
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const month = /^\d{4}-\d{2}$/.test(sp.month || "") ? sp.month! : defaultMonth;
 
+  const { userId } = await requireUser();
   const sql = getSql();
   const items = await sql<CalendarItemRow[]>`
-    SELECT * FROM calendar_items WHERE fecha LIKE ${month + "%"} ORDER BY fecha ASC
+    SELECT * FROM calendar_items
+    WHERE user_id = ${userId} AND fecha LIKE ${month + "%"} ORDER BY fecha ASC
   `;
   const campaigns = await sql<CampaignRow[]>`
-    SELECT * FROM campaigns WHERE estado = 'activa' ORDER BY created_at DESC
+    SELECT * FROM campaigns
+    WHERE user_id = ${userId} AND estado = 'activa' ORDER BY created_at DESC
   `;
 
   const monthLabel = new Date(`${month}-01T00:00:00`).toLocaleDateString("es-ES", {

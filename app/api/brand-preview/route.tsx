@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { guard } from "@/lib/api";
 import { renderSlide, VisualStyle } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
@@ -9,9 +9,9 @@ const DEMO_SLIDE = {
 };
 
 export async function GET(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
-  const style = await buildBrandStyle();
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const style = await buildBrandStyle(auth.userId);
   const override = req.nextUrl.searchParams.get("style");
   if (override) style.visualStyle = override as VisualStyle;
 

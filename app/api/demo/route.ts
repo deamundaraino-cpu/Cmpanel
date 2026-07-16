@@ -19,16 +19,17 @@ const DEMO_POSTS = [
 ];
 
 export async function POST(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { action } = await req.json().catch(() => ({}));
     const sql = getSql();
 
     if (action === "clear") {
-      await sql`DELETE FROM posts WHERE is_demo = 1`;
-      await sql`DELETE FROM stories WHERE id LIKE 'demo-story-%'`;
-      await recomputeScores();
+      await sql`DELETE FROM posts WHERE user_id = ${userId} AND is_demo = 1`;
+      await sql`DELETE FROM stories WHERE user_id = ${userId} AND id LIKE 'demo-story-%'`;
+      await recomputeScores(userId);
       return NextResponse.json({ ok: true, cleared: true });
     }
 
@@ -38,14 +39,14 @@ export async function POST(req: NextRequest) {
       const p = DEMO_POSTS[i];
       const ts = new Date(now - p.days * 86400_000).toISOString();
       await sql`
-        INSERT INTO posts (id, caption, media_type, media_product_type, permalink,
+        INSERT INTO posts (user_id, id, caption, media_type, media_product_type, permalink,
           timestamp, like_count, comments_count, reach, saved, shares, views,
           total_interactions, is_demo, last_synced)
-        VALUES (${"demo-" + (i + 1)}, ${p.caption}, ${p.type}, ${p.product},
+        VALUES (${userId}, ${"demo-" + (i + 1)}, ${p.caption}, ${p.type}, ${p.product},
           'https://instagram.com/p/demo', ${ts}, ${p.likes}, ${p.comments}, ${p.reach},
           ${p.saved}, ${p.shares}, ${Math.round(p.reach * 1.4)},
           ${p.likes + p.comments + p.saved + p.shares}, 1, ${nowIso})
-        ON CONFLICT (id) DO UPDATE SET
+        ON CONFLICT (user_id, id) DO UPDATE SET
           like_count = EXCLUDED.like_count,
           reach = EXCLUDED.reach,
           timestamp = EXCLUDED.timestamp,
@@ -59,12 +60,12 @@ export async function POST(req: NextRequest) {
       const views = 350 + Math.round(Math.sin(i * 1.7) * 120) + i * 8;
       const exits = Math.round(views * (0.12 + (i % 4) * 0.03));
       await sql`
-        INSERT INTO stories (id, timestamp, media_type, views, reach, replies, shares,
+        INSERT INTO stories (user_id, id, timestamp, media_type, views, reach, replies, shares,
           total_interactions, exits, taps_forward, taps_back, last_synced)
-        VALUES (${"demo-story-" + (i + 1)}, ${new Date(now - daysAgo * 86400_000).toISOString()},
+        VALUES (${userId}, ${"demo-story-" + (i + 1)}, ${new Date(now - daysAgo * 86400_000).toISOString()},
           'IMAGE', ${views}, ${Math.round(views * 0.92)}, ${i % 3 === 0 ? 4 + i : 1}, ${i % 2},
           ${6 + (i % 5)}, ${exits}, ${Math.round(views * 0.4)}, ${Math.round(views * 0.08)}, ${nowIso})
-        ON CONFLICT (id) DO UPDATE SET
+        ON CONFLICT (user_id, id) DO UPDATE SET
           views = EXCLUDED.views,
           timestamp = EXCLUDED.timestamp,
           last_synced = EXCLUDED.last_synced
@@ -73,12 +74,12 @@ export async function POST(req: NextRequest) {
 
     const today = new Date().toISOString().slice(0, 10);
     await sql`
-      INSERT INTO account_snapshots (date, followers_count, media_count)
-      VALUES (${today}, 8450, ${DEMO_POSTS.length})
-      ON CONFLICT (date) DO UPDATE SET followers_count = EXCLUDED.followers_count
+      INSERT INTO account_snapshots (user_id, date, followers_count, media_count)
+      VALUES (${userId}, ${today}, 8450, ${DEMO_POSTS.length})
+      ON CONFLICT (user_id, date) DO UPDATE SET followers_count = EXCLUDED.followers_count
     `;
 
-    const { winners } = await recomputeScores();
+    const { winners } = await recomputeScores(userId);
     return NextResponse.json({ ok: true, seeded: DEMO_POSTS.length, winners });
   } catch (e) {
     return fail(e);

@@ -6,13 +6,14 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
     const { campaign_id } = await req.json();
     await getSql()`
-      UPDATE posts SET campaign_id = ${campaign_id || null} WHERE id = ${id}
+      UPDATE posts SET campaign_id = ${campaign_id || null}
+      WHERE user_id = ${auth.userId} AND id = ${id}
     `;
     return NextResponse.json({ ok: true });
   } catch (e) {

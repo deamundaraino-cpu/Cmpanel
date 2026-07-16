@@ -4,6 +4,7 @@ import { getSql, PostRow } from "@/lib/db";
 import { recomputeScores } from "@/lib/scoring";
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 
 export const maxDuration = 120;
 
@@ -32,19 +33,25 @@ function describePost(p: PostRow) {
 }
 
 export async function POST() {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
-    await recomputeScores();
+    await recomputeScores(userId);
     const sql = getSql();
-    const posts = await sql<PostRow[]>`SELECT * FROM posts ORDER BY er DESC`;
+    const posts = await sql<PostRow[]>`
+      SELECT * FROM posts WHERE user_id = ${userId} ORDER BY er DESC
+    `;
     if (posts.length < 3) {
       return fail(new Error("Necesitas al menos 3 posts sincronizados para analizar."), 400);
     }
 
+    const quota = await consumeQuota(userId, "analyze");
+    if (!quota.ok) return quotaExceeded(quota);
+
     const top = posts.slice(0, 5).map(describePost);
     const bottom = posts.slice(-5).map(describePost);
-    const brief = await buildBrandBrief();
+    const brief = await buildBrandBrief(userId);
 
     const analysis = await chatJson<Analysis>(
       `Eres un community manager senior experto en Instagram para marcas personales. Analizas métricas y das recomendaciones concretas y accionables en español, coherentes con la identidad, el cliente ideal y los objetivos de la marca.\n\nFicha de marca:\n${brief}`,
@@ -52,8 +59,8 @@ export async function POST() {
     );
 
     await sql`
-      INSERT INTO recommendations (created_at, content)
-      VALUES (${new Date().toISOString()}, ${JSON.stringify(analysis)})
+      INSERT INTO recommendations (user_id, created_at, content)
+      VALUES (${userId}, ${new Date().toISOString()}, ${JSON.stringify(analysis)})
     `;
 
     return NextResponse.json({ ok: true, analysis });

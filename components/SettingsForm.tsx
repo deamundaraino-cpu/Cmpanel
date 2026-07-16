@@ -1,16 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Settings = Record<string, string>;
-
-const PROVIDER_OPTIONS = [
-  { value: "groq", label: "Groq — gratis (recomendado)" },
-  { value: "openrouter", label: "OpenRouter — modelos :free" },
-  { value: "gemini", label: "Google Gemini — capa gratis" },
-  { value: "custom", label: "Personalizado (URL OpenAI-compatible)" },
-];
 
 function Field({
   label,
@@ -35,6 +28,7 @@ export default function SettingsForm() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     fetch("/api/settings")
@@ -44,6 +38,17 @@ export default function SettingsForm() {
         setLoaded(true);
       });
   }, []);
+
+  // Resultado del callback OAuth (?ig=ok|error)
+  useEffect(() => {
+    const ig = searchParams.get("ig");
+    if (ig === "ok") {
+      const u = searchParams.get("username");
+      setMsg(`✓ Instagram conectado${u ? ` como @${u}` : ""}`);
+    } else if (ig === "error") {
+      setMsg(`⚠️ ${searchParams.get("msg") || "No se pudo conectar Instagram"}`);
+    }
+  }, [searchParams]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setS((prev) => ({ ...prev, [k]: e.target.value }));
@@ -68,6 +73,7 @@ export default function SettingsForm() {
   }
 
   const save = () => action(s, "save", () => "Ajustes guardados ✓");
+  const connected = !!s.ig_username || !!s.ig_token;
 
   if (!loaded) return <p className="text-sm text-zinc-500">Cargando…</p>;
 
@@ -82,121 +88,95 @@ export default function SettingsForm() {
       <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
         <h2 className="font-medium">📸 Conexión con Instagram</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Pega tu token de larga duración (ver GUIA.md, paso 1). Caduca a los 60
-          días: usa «Renovar token» antes de esa fecha.
+          Conecta tu cuenta profesional (Business o Creator) con un clic. El
+          acceso se renueva solo; puedes desconectarla cuando quieras.
         </p>
+
         <div className="mt-4 grid gap-3">
-          <Field
-            label="Token de acceso de Instagram"
-            value={s.ig_token || ""}
-            onChange={set("ig_token")}
-            placeholder="IGAA..."
-          />
-          {s.ig_username && (
-            <p className="text-xs text-emerald-400">Cuenta verificada: @{s.ig_username}</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() =>
-                action(
-                  { action: "test_ig" },
-                  "test_ig",
-                  (j) => {
+          {connected ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-emerald-400">
+                ✓ Conectado{s.ig_username ? ` como @${s.ig_username}` : ""}
+              </p>
+              <button
+                onClick={() =>
+                  action({ action: "test_ig" }, "test_ig", (j) => {
                     const p = j.profile as { username: string; followers_count: number };
-                    return `✓ Conectado como @${p.username} (${p.followers_count} seguidores)`;
+                    return `✓ Conexión activa: @${p.username} (${p.followers_count} seguidores)`;
+                  })
+                }
+                disabled={!!busy}
+                className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {busy === "test_ig" ? "Probando…" : "Probar conexión"}
+              </button>
+              <button
+                onClick={() =>
+                  action({ action: "refresh_ig_token" }, "refresh", () => "Acceso renovado ✓ (60 días más)")
+                }
+                disabled={!!busy}
+                className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {busy === "refresh" ? "Renovando…" : "Renovar acceso"}
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm("¿Desconectar Instagram? Tus datos ya sincronizados se conservan.")) {
+                    action({ action: "disconnect_ig" }, "disconnect", () => "Instagram desconectado");
+                    setS((prev) => ({ ...prev, ig_username: "", ig_token: "" }));
                   }
-                )
-              }
-              disabled={!!busy}
-              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
-            >
-              {busy === "test_ig" ? "Probando…" : "Probar conexión"}
-            </button>
-            <button
-              onClick={() =>
-                action({ action: "refresh_ig_token" }, "refresh", () => "Token renovado ✓ (60 días más)")
-              }
-              disabled={!!busy}
-              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
-            >
-              {busy === "refresh" ? "Renovando…" : "Renovar token"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-        <h2 className="font-medium">🧠 Proveedor de IA (gratis)</h2>
-        <div className="mt-4 grid gap-3">
-          <label className="block">
-            <span className="text-xs font-medium text-zinc-400">Proveedor</span>
-            <select
-              value={s.llm_provider || "groq"}
-              onChange={set("llm_provider")}
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-            >
-              {PROVIDER_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field
-            label="API Key"
-            value={s.llm_api_key || ""}
-            onChange={set("llm_api_key")}
-            placeholder="gsk_... / sk-or-... / AIza..."
-            hint="Groq: console.groq.com · OpenRouter: openrouter.ai/keys · Gemini: aistudio.google.com"
-          />
-          <Field
-            label="Modelo (opcional, hay uno por defecto)"
-            value={s.llm_model || ""}
-            onChange={set("llm_model")}
-            placeholder="ej. llama-3.3-70b-versatile"
-          />
-          {s.llm_provider === "custom" && (
-            <Field
-              label="URL base (OpenAI-compatible)"
-              value={s.llm_base_url || ""}
-              onChange={set("llm_base_url")}
-              placeholder="https://mi-proveedor/v1"
-            />
+                }}
+                disabled={!!busy}
+                className="rounded-lg border border-red-900/60 px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:opacity-50"
+              >
+                Desconectar
+              </button>
+            </div>
+          ) : (
+            <div>
+              <a
+                href="/api/instagram/connect"
+                className="inline-block rounded-lg bg-gradient-to-r from-fuchsia-600 to-orange-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Conectar con Instagram
+              </a>
+              <p className="mt-2 text-xs text-zinc-600">
+                Se abrirá Instagram para autorizar el acceso de solo lectura a
+                tus métricas.
+              </p>
+            </div>
           )}
-          <div>
-            <button
-              onClick={() =>
-                action({ action: "test_llm" }, "test_llm", (j) => `✓ IA responde: "${j.reply}"`)
-              }
-              disabled={!!busy}
-              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
-            >
-              {busy === "test_llm" ? "Probando…" : "Probar IA"}
-            </button>
-          </div>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+              Avanzado: pegar token manualmente
+            </summary>
+            <div className="mt-3 grid gap-3">
+              <Field
+                label="Token de acceso de Instagram (larga duración)"
+                value={s.ig_token || ""}
+                onChange={set("ig_token")}
+                placeholder="IGAA..."
+                hint="Solo si sabes lo que haces: token generado en developers.facebook.com. Caduca a los 60 días; la plataforma lo renueva sola."
+              />
+              <div>
+                <button
+                  onClick={save}
+                  disabled={!!busy}
+                  className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {busy === "save" ? "Guardando…" : "Guardar token"}
+                </button>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-        <h2 className="font-medium">🔍 Búsqueda web (opcional)</h2>
-        <div className="mt-4">
-          <Field
-            label="Tavily API Key"
-            value={s.tavily_api_key || ""}
-            onChange={set("tavily_api_key")}
-            hint="Gratis 1.000 búsquedas/mes en tavily.com — sin ella, las ideas se generan sin búsqueda en vivo."
-          />
-        </div>
-      </section>
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={!!busy}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {busy === "save" ? "Guardando…" : "Guardar ajustes"}
-        </button>
+      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-4 text-xs text-zinc-500">
+        🧠 La IA (análisis, ideas, propuestas) ya viene incluida y configurada
+        — no necesitas ninguna API key. Tienes un cupo diario de operaciones de
+        IA que se reinicia cada día.
       </div>
     </div>
   );

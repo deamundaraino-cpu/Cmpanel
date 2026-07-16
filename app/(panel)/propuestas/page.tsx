@@ -1,11 +1,15 @@
 import { getSql, ProposalRow } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProposalsPage() {
+  const { userId } = await requireUser();
   const sql = getSql();
-  const proposals = await sql<ProposalRow[]>`SELECT * FROM proposals ORDER BY id DESC`;
+  const proposals = await sql<ProposalRow[]>`
+    SELECT * FROM proposals WHERE user_id = ${userId} ORDER BY id DESC
+  `;
 
   return (
     <div className="mx-auto max-w-4xl">

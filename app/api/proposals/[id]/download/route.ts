@@ -11,12 +11,15 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { id } = await params;
     const sql = getSql();
-    const rows = await sql<ProposalRow[]>`SELECT * FROM proposals WHERE id = ${Number(id)}`;
+    const rows = await sql<ProposalRow[]>`
+      SELECT * FROM proposals WHERE user_id = ${userId} AND id = ${Number(id)}
+    `;
     const proposal = rows[0];
     if (!proposal?.slides) return fail(new Error("Propuesta no encontrada"), 404);
 
@@ -35,7 +38,7 @@ export async function GET(
     }
 
     const slides = JSON.parse(proposal.slides) as Slide[];
-    const style = await buildBrandStyle();
+    const style = await buildBrandStyle(userId);
 
     const zip = new JSZip();
     for (let i = 0; i < slides.length; i++) {

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, fail } from "@/lib/api";
+import { getSql } from "@/lib/db";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getProfile, refreshToken } from "@/lib/instagram";
 import { chat } from "@/lib/llm";
 
+// Ajustes por usuario: conexión de Instagram + identidad de marca.
+// (Las llaves de IA — LLM/Tavily — son del servidor y no se exponen aquí.)
 const KEYS = [
   "ig_token",
   "ig_token_fetched_at",
   "ig_username",
-  "llm_provider",
-  "llm_api_key",
-  "llm_model",
-  "llm_base_url",
-  "tavily_api_key",
   "brand_name",
   "brand_handle",
   "brand_color",
@@ -29,7 +27,8 @@ const KEYS = [
   "brand_avoid",
 ];
 
-const SECRET_KEYS = new Set(["ig_token", "llm_api_key", "tavily_api_key"]);
+const SECRET_KEYS = new Set(["ig_token"]);
+const IG_KEYS = ["ig_token", "ig_token_fetched_at", "ig_user_id", "ig_username"];
 
 function mask(v: string | null) {
   if (!v) return "";
@@ -37,9 +36,9 @@ function mask(v: string | null) {
 }
 
 export async function GET() {
-  const g = await guard();
-  if (g) return g;
-  const raw = await getSettings(KEYS);
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const raw = await getSettings(auth.userId, KEYS);
   const out: Record<string, string> = {};
   for (const k of KEYS) {
     out[k] = SECRET_KEYS.has(k) ? mask(raw[k]) : raw[k] || "";
@@ -48,24 +47,37 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const body = await req.json();
 
     if (body.action === "test_ig") {
-      const profile = await getProfile();
-      await setSetting("ig_user_id", String(profile.user_id ?? ""));
-      await setSetting("ig_username", profile.username || "");
+      const profile = await getProfile(userId);
+      await setSetting(userId, "ig_user_id", String(profile.user_id ?? ""));
+      await setSetting(userId, "ig_username", profile.username || "");
       return NextResponse.json({ ok: true, profile });
     }
 
     if (body.action === "refresh_ig_token") {
-      await refreshToken();
+      await refreshToken(userId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "disconnect_ig") {
+      const sql = getSql();
+      await sql`
+        DELETE FROM settings WHERE user_id = ${userId} AND key = ANY(${IG_KEYS})
+      `;
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "test_llm") {
+      // Prueba de la IA del servidor (solo admin: los usuarios no la configuran).
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "Solo admin" }, { status: 403 });
+      }
       const reply = await chat(
         "Eres un asistente de prueba. Responde en una sola frase corta en español.",
         "Di 'conexión correcta' y el nombre del modelo que eres si lo sabes."
@@ -82,8 +94,10 @@ export async function POST(req: NextRequest) {
       if (!KEYS.includes(k) || typeof v !== "string") continue;
       // No sobrescribir secretos con el valor enmascarado
       if (SECRET_KEYS.has(k) && (v.includes("••••") || v === "")) continue;
-      await setSetting(k, v);
-      if (k === "ig_token") await setSetting("ig_token_fetched_at", new Date().toISOString());
+      await setSetting(userId, k, v);
+      if (k === "ig_token") {
+        await setSetting(userId, "ig_token_fetched_at", new Date().toISOString());
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

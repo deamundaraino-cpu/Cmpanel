@@ -4,24 +4,30 @@ import { getSql, PostRow, ProposalRow, StructureRow, StructureBeat } from "@/lib
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
 import { CarouselGen, ScriptGen, QUALITY_BAR, clampQuality } from "@/lib/proposalGen";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 
 export const maxDuration = 120;
 
 export async function GET() {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const sql = getSql();
-  const rows = await sql<ProposalRow[]>`SELECT * FROM proposals ORDER BY id DESC`;
+  const rows = await sql<ProposalRow[]>`
+    SELECT * FROM proposals WHERE user_id = ${auth.userId} ORDER BY id DESC
+  `;
   return NextResponse.json(rows);
 }
 
 async function describeSource(
+  userId: string,
   postId: string | undefined,
   tema: string | undefined
 ): Promise<{ context: string; sourcePostId: string | null }> {
   if (postId) {
     const sql = getSql();
-    const rows = await sql<PostRow[]>`SELECT * FROM posts WHERE id = ${postId}`;
+    const rows = await sql<PostRow[]>`
+      SELECT * FROM posts WHERE user_id = ${userId} AND id = ${postId}
+    `;
     const post = rows[0];
     if (!post) throw new Error("Post no encontrado");
     return {
@@ -39,20 +45,24 @@ async function describeSource(
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { postId, tema, formato, structureId } = await req.json().catch(() => ({}));
     const sql = getSql();
-    const brief = await buildBrandBrief();
+    const brief = await buildBrandBrief(userId);
     const kind = formato === "guion_video" ? "guion_video" : "carrusel";
 
     let source: { context: string; sourcePostId: string | null };
     try {
-      source = await describeSource(postId, tema);
+      source = await describeSource(userId, postId, tema);
     } catch (e) {
       return fail(e, 400);
     }
+
+    const quota = await consumeQuota(userId, "proposal");
+    if (!quota.ok) return quotaExceeded(quota);
 
     if (kind === "carrusel") {
       const gen = await chatJson<CarouselGen>(
@@ -63,8 +73,8 @@ export async function POST(req: NextRequest) {
       const q = clampQuality(gen.calidad);
 
       const [row] = await sql<{ id: number }[]>`
-        INSERT INTO proposals (post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
-        VALUES (${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
+        INSERT INTO proposals (user_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
+        VALUES (${userId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
           ${JSON.stringify(gen.slides)}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
           NULL, ${q.score}, ${q.notes})
         RETURNING id
@@ -75,7 +85,8 @@ export async function POST(req: NextRequest) {
     // --- guion_video ---
     if (!structureId) return fail(new Error("Falta la estructura de guion"), 400);
     const structures = await sql<StructureRow[]>`
-      SELECT * FROM structures WHERE id = ${Number(structureId)}
+      SELECT * FROM structures
+      WHERE id = ${Number(structureId)} AND (user_id = ${userId} OR user_id IS NULL)
     `;
     const structure = structures[0];
     if (!structure) return fail(new Error("Estructura no encontrada"), 404);
@@ -92,8 +103,8 @@ export async function POST(req: NextRequest) {
     const q = clampQuality(gen.calidad);
 
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO proposals (post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
-      VALUES (${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
+      INSERT INTO proposals (user_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
+      VALUES (${userId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
         ${JSON.stringify(gen.beats)}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
         ${structure.id}, ${q.score}, ${q.notes})
       RETURNING id

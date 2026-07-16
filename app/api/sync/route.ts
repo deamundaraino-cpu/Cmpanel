@@ -5,10 +5,10 @@ import { runSync } from "@/lib/syncEngine";
 export const maxDuration = 300;
 
 export async function POST() {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   try {
-    const result = await runSync(100);
+    const result = await runSync(auth.userId, 100);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return fail(e);

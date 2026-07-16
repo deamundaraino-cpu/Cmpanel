@@ -15,8 +15,8 @@ const BRIEF_KEYS = [
 ] as const;
 
 /** Ficha de marca completa, lista para inyectar en cualquier prompt de la IA. */
-export async function buildBrandBrief(): Promise<string> {
-  const s = await getSettings([...BRIEF_KEYS]);
+export async function buildBrandBrief(userId: string): Promise<string> {
+  const s = await getSettings(userId, [...BRIEF_KEYS]);
   const lines: string[] = [];
 
   if (s.brand_name) lines.push(`Marca: ${s.brand_name}${s.brand_handle ? ` (${s.brand_handle})` : ""}`);
@@ -34,16 +34,16 @@ export async function buildBrandBrief(): Promise<string> {
     : "Sin ficha de marca configurada todavía (ve a 🧠 Marca para completarla).";
 }
 
-export async function hasBrandBrief(): Promise<boolean> {
-  const s = await getSettings([...BRIEF_KEYS]);
+export async function hasBrandBrief(userId: string): Promise<boolean> {
+  const s = await getSettings(userId, [...BRIEF_KEYS]);
   return Object.values(s).some((v) => !!v);
 }
 
 const VALID_STYLES: VisualStyle[] = ["minimal_oscuro", "editorial_claro", "bold_contraste"];
 
 /** Identidad visual lista para pasar a renderSlide(): color, estilo y logo. */
-export async function buildBrandStyle(): Promise<BrandStyle> {
-  const s = await getSettings([
+export async function buildBrandStyle(userId: string): Promise<BrandStyle> {
+  const s = await getSettings(userId, [
     "brand_name",
     "brand_handle",
     "brand_color",

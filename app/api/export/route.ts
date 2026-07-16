@@ -21,13 +21,18 @@ const TABLES = [
 
 /** Copia de seguridad completa en JSON (todas las tablas). */
 export async function GET() {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   try {
     const sql = getSql();
     const dump: Record<string, unknown[]> = {};
     for (const table of TABLES) {
-      const rows = await sql`SELECT * FROM ${sql(table)}`;
+      // structures incluye también las builtin globales (user_id NULL)
+      const rows =
+        table === "structures"
+          ? await sql`SELECT * FROM structures
+              WHERE user_id = ${auth.userId} OR user_id IS NULL`
+          : await sql`SELECT * FROM ${sql(table)} WHERE user_id = ${auth.userId}`;
       dump[table] = [...rows];
     }
     const payload = JSON.stringify(

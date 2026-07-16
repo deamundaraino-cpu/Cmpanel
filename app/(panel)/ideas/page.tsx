@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSql } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
+import { requireUser } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
 import ResearchControl from "@/components/ResearchControl";
 
@@ -39,15 +40,17 @@ export default async function IdeasPage({
     ? sp.pilar!
     : "";
 
+  const { userId } = await requireUser();
   const sql = getSql();
   const ideas = (
     filter
-      ? await sql`SELECT * FROM ideas WHERE pilar = ${filter} ORDER BY id DESC LIMIT 40`
-      : await sql`SELECT * FROM ideas ORDER BY id DESC LIMIT 40`
+      ? await sql`SELECT * FROM ideas
+          WHERE user_id = ${userId} AND pilar = ${filter} ORDER BY id DESC LIMIT 40`
+      : await sql`SELECT * FROM ideas WHERE user_id = ${userId} ORDER BY id DESC LIMIT 40`
   ) as unknown as IdeaRow[];
-  const s = await getSettings(["brand_niche", "tavily_api_key"]);
+  const s = await getSettings(userId, ["brand_niche"]);
   const niche = s.brand_niche;
-  const hasTavily = !!s.tavily_api_key;
+  const hasTavily = !!process.env.TAVILY_API_KEY;
 
   return (
     <div className="mx-auto max-w-4xl">

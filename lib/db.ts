@@ -22,7 +22,18 @@ export function getSql() {
   return client;
 }
 
+export type UserRow = {
+  id: string;
+  email: string;
+  role: string;
+  ai_daily_limit: number | null;
+  last_synced_at: string | null;
+  onboarded: number;
+  created_at: string;
+};
+
 export type PostRow = {
+  user_id: string;
   id: string;
   caption: string | null;
   media_type: string | null;
@@ -48,6 +59,7 @@ export type PostRow = {
 
 export type ProposalRow = {
   id: number;
+  user_id: string;
   post_id: string | null;
   created_at: string;
   status: string;
@@ -64,6 +76,7 @@ export type StructureBeat = { nombre: string; guia: string };
 
 export type StructureRow = {
   id: number;
+  user_id: string | null; // null = builtin global
   created_at: string;
   nombre: string;
   descripcion: string | null;
@@ -73,6 +86,7 @@ export type StructureRow = {
 
 export type CampaignRow = {
   id: number;
+  user_id: string;
   created_at: string;
   nombre: string;
   descripcion: string | null;
@@ -84,6 +98,7 @@ export type CampaignRow = {
 
 export type CalendarItemRow = {
   id: number;
+  user_id: string;
   created_at: string;
   fecha: string;
   titulo: string;
@@ -96,12 +111,14 @@ export type CalendarItemRow = {
 
 export type ReportRow = {
   id: number;
+  user_id: string;
   created_at: string;
   period_days: number;
   content: string;
 };
 
 export type StoryRow = {
+  user_id: string;
   id: string;
   timestamp: string | null;
   media_type: string | null;
@@ -120,6 +137,7 @@ export type StoryRow = {
 };
 
 export type CommentRow = {
+  user_id: string;
   id: string;
   post_id: string;
   text: string | null;

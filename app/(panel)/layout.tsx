@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { isAuthed } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import NavLink from "@/components/NavLink";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -20,7 +19,7 @@ export default async function PanelLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await isAuthed())) redirect("/login");
+  const auth = await requireUser();
 
   return (
     <div className="flex min-h-screen">
@@ -37,7 +36,7 @@ export default async function PanelLayout({
 
         <nav className="mt-3 flex-1">
           <NavGroup label="Analiza">
-            <NavLink href="/" icon="home">Dashboard</NavLink>
+            <NavLink href="/dashboard" icon="home">Dashboard</NavLink>
             <NavLink href="/metricas" icon="chart">Métricas</NavLink>
             <NavLink href="/posts" icon="grid">Publicaciones</NavLink>
           </NavGroup>
@@ -52,6 +51,11 @@ export default async function PanelLayout({
             <NavLink href="/estructuras" icon="film">Estructuras</NavLink>
             <NavLink href="/marca" icon="gem">Marca</NavLink>
           </NavGroup>
+          {auth.role === "admin" && (
+            <NavGroup label="Gestión">
+              <NavLink href="/admin" icon="sliders">Admin</NavLink>
+            </NavGroup>
+          )}
         </nav>
 
         <div className="mt-4 grid gap-0.5 border-t border-zinc-800/80 pt-3">

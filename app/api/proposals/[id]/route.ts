@@ -4,6 +4,7 @@ import { getSql, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
 import { CarouselGen, ScriptGen, QUALITY_BAR, clampQuality } from "@/lib/proposalGen";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 
 export const maxDuration = 120;
 
@@ -11,8 +12,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
@@ -23,18 +25,24 @@ export async function PATCH(
       const feedback = String(body.feedback || "").trim();
       if (!feedback) return fail(new Error("Escribe qué quieres cambiar"), 400);
 
-      const rows = await sql<ProposalRow[]>`SELECT * FROM proposals WHERE id = ${Number(id)}`;
+      const rows = await sql<ProposalRow[]>`
+        SELECT * FROM proposals WHERE user_id = ${userId} AND id = ${Number(id)}
+      `;
       const proposal = rows[0];
       if (!proposal?.slides) return fail(new Error("Propuesta no encontrada"), 404);
 
-      const brief = await buildBrandBrief();
+      const quota = await consumeQuota(userId, "regenerate");
+      if (!quota.ok) return quotaExceeded(quota);
+
+      const brief = await buildBrandBrief(userId);
       const isScript = proposal.formato === "guion_video";
 
       if (isScript) {
         let beatsGuide = "";
         if (proposal.structure_id) {
           const structures = await sql<StructureRow[]>`
-            SELECT * FROM structures WHERE id = ${proposal.structure_id}
+            SELECT * FROM structures
+            WHERE id = ${proposal.structure_id} AND (user_id = ${userId} OR user_id IS NULL)
           `;
           if (structures[0]) {
             const beats = JSON.parse(structures[0].beats) as StructureBeat[];
@@ -57,7 +65,7 @@ export async function PATCH(
             quality = ${q.score},
             quality_notes = ${q.notes},
             status = 'pendiente'
-          WHERE id = ${Number(id)}
+          WHERE user_id = ${userId} AND id = ${Number(id)}
         `;
         return NextResponse.json({ ok: true, regenerated: true });
       }
@@ -76,7 +84,7 @@ export async function PATCH(
           quality = ${q.score},
           quality_notes = ${q.notes},
           status = 'pendiente'
-        WHERE id = ${Number(id)}
+        WHERE user_id = ${userId} AND id = ${Number(id)}
       `;
       return NextResponse.json({ ok: true, regenerated: true });
     }
@@ -86,7 +94,10 @@ export async function PATCH(
     if (!["aprobada", "rechazada", "pendiente"].includes(status)) {
       return fail(new Error("Estado inválido"), 400);
     }
-    await sql`UPDATE proposals SET status = ${status} WHERE id = ${Number(id)}`;
+    await sql`
+      UPDATE proposals SET status = ${status}
+      WHERE user_id = ${userId} AND id = ${Number(id)}
+    `;
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);
@@ -97,9 +108,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
-  await getSql()`DELETE FROM proposals WHERE id = ${Number(id)}`;
+  await getSql()`
+    DELETE FROM proposals WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+  `;
   return NextResponse.json({ ok: true });
 }

@@ -1,11 +1,13 @@
 import BrandForm from "@/components/BrandForm";
 import { buildBrandBrief, hasBrandBrief } from "@/lib/brand";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function BrandPage() {
-  const complete = await hasBrandBrief();
-  const brief = await buildBrandBrief();
+  const { userId } = await requireUser();
+  const complete = await hasBrandBrief(userId);
+  const brief = await buildBrandBrief(userId);
 
   return (
     <div className="mx-auto max-w-3xl">

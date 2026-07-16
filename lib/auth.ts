@@ -1,43 +1,75 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { getSupabaseServer } from "./supabase";
+import { getSql } from "./db";
 
-const COOKIE = "bp_session";
-const DAYS = 30;
+export type Auth = {
+  userId: string;
+  email: string;
+  role: "user" | "admin";
+  onboarded: boolean;
+};
 
-function getPassword() {
-  return process.env.APP_PASSWORD || "adshouse";
+/**
+ * Identidad de la petición actual (JWT de Supabase verificado en local
+ * + fila espejo en public.users para rol/onboarding). null si no hay sesión.
+ */
+export async function getAuth(): Promise<Auth | null> {
+  const supabase = await getSupabaseServer();
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub) return null;
+  const userId = String(claims.sub);
+  const email = typeof claims.email === "string" ? claims.email : "";
+
+  const sql = getSql();
+  let rows = await sql`
+    SELECT role, onboarded FROM users WHERE id = ${userId}
+  `;
+  if (!rows.length) {
+    // Fila espejo si el trigger aún no existía cuando se creó la cuenta.
+    rows = await sql`
+      INSERT INTO users (id, email) VALUES (${userId}, ${email})
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email
+      RETURNING role, onboarded
+    `;
+  }
+  const row = rows[0] as { role: string; onboarded: number };
+  return {
+    userId,
+    email,
+    role: row.role === "admin" ? "admin" : "user",
+    onboarded: Boolean(row.onboarded),
+  };
 }
+
+/** Para páginas server del panel: redirige a /login si no hay sesión. */
+export async function requireUser(): Promise<Auth> {
+  const auth = await getAuth();
+  if (!auth) redirect("/login");
+  return auth;
+}
+
+/** Para páginas/API solo de admin. */
+export async function requireAdmin(): Promise<Auth> {
+  const auth = await requireUser();
+  if (auth.role !== "admin") redirect("/dashboard");
+  return auth;
+}
+
+// ---- HMAC firmado con SESSION_SECRET (state del OAuth de Instagram) ----
 
 function getSecret() {
-  return process.env.SESSION_SECRET || "bp-secret-" + getPassword();
+  return process.env.SESSION_SECRET || "bp-secret-dev";
 }
 
-function sign(expiry: string) {
-  return createHmac("sha256", getSecret()).update(expiry).digest("hex");
+export function signPayload(payload: string): string {
+  return createHmac("sha256", getSecret()).update(payload).digest("hex");
 }
 
-export function checkPassword(password: string) {
-  const a = Buffer.from(password);
-  const b = Buffer.from(getPassword());
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-export function makeSessionValue(): { value: string; maxAge: number } {
-  const expiry = String(Date.now() + DAYS * 86400_000);
-  return { value: `${expiry}.${sign(expiry)}`, maxAge: DAYS * 86400 };
-}
-
-export async function isAuthed(): Promise<boolean> {
-  const jar = await cookies();
-  const raw = jar.get(COOKIE)?.value;
-  if (!raw) return false;
-  const [expiry, sig] = raw.split(".");
-  if (!expiry || !sig) return false;
-  if (Number(expiry) < Date.now()) return false;
-  const expected = sign(expiry);
-  const a = Buffer.from(sig);
+export function verifyPayload(payload: string, signature: string): boolean {
+  const expected = signPayload(payload);
+  const a = Buffer.from(signature);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
-
-export const SESSION_COOKIE = COOKIE;

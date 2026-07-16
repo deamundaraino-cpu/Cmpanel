@@ -9,8 +9,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
     const body = await req.json();
@@ -24,7 +24,10 @@ export async function PATCH(
     const keys = Object.keys(patch);
     if (!keys.length) return fail(new Error("Nada que actualizar"), 400);
     const sql = getSql();
-    await sql`UPDATE calendar_items SET ${sql(patch, ...keys)} WHERE id = ${Number(id)}`;
+    await sql`
+      UPDATE calendar_items SET ${sql(patch, ...keys)}
+      WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+    `;
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);
@@ -35,9 +38,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
-  await getSql()`DELETE FROM calendar_items WHERE id = ${Number(id)}`;
+  await getSql()`
+    DELETE FROM calendar_items WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+  `;
   return NextResponse.json({ ok: true });
 }

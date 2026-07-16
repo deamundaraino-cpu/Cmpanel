@@ -1,4 +1,5 @@
 import { getSql, CampaignRow } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import CampaignsManager from "@/components/CampaignsManager";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,14 @@ type CampaignRollup = CampaignRow & {
 };
 
 export default async function CampaignsPage() {
+  const { userId } = await requireUser();
   const sql = getSql();
   const campaigns = (await sql`
     SELECT c.*, COUNT(p.id)::int AS posts_count, COALESCE(SUM(p.reach), 0)::int AS total_reach,
       COALESCE(AVG(p.er), 0)::float AS avg_er
-    FROM campaigns c LEFT JOIN posts p ON p.campaign_id = c.id
+    FROM campaigns c
+    LEFT JOIN posts p ON p.user_id = c.user_id AND p.campaign_id = c.id
+    WHERE c.user_id = ${userId}
     GROUP BY c.id ORDER BY c.created_at DESC
   `) as unknown as CampaignRollup[];
 

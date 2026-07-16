@@ -8,13 +8,13 @@ export type Alert = {
 };
 
 /** Alertas operativas calculadas sobre datos reales (sin IA, sin coste). */
-export async function computeAlerts(): Promise<Alert[]> {
+export async function computeAlerts(userId: string): Promise<Alert[]> {
   const sql = getSql();
   const alerts: Alert[] = [];
   const now = Date.now();
 
   // 1. Token de Instagram a punto de caducar (dura 60 días).
-  const s = await getSettings(["ig_token", "ig_token_fetched_at"]);
+  const s = await getSettings(userId, ["ig_token", "ig_token_fetched_at"]);
   if (s.ig_token) {
     if (s.ig_token_fetched_at) {
       const ageDays = (now - new Date(s.ig_token_fetched_at).getTime()) / 86400_000;
@@ -42,7 +42,8 @@ export async function computeAlerts(): Promise<Alert[]> {
 
   // 2. Días sin publicar.
   const lastPost = await sql<{ timestamp: string }[]>`
-    SELECT timestamp FROM posts WHERE is_demo = 0 ORDER BY timestamp DESC LIMIT 1
+    SELECT timestamp FROM posts WHERE user_id = ${userId} AND is_demo = 0
+    ORDER BY timestamp DESC LIMIT 1
   `;
   if (lastPost[0]?.timestamp) {
     const idleDays = Math.floor((now - new Date(lastPost[0].timestamp).getTime()) / 86400_000);
@@ -64,9 +65,12 @@ export async function computeAlerts(): Promise<Alert[]> {
   // 3. Engagement cayendo (últimos 30 días vs 30 anteriores).
   const since30 = new Date(now - 30 * 86400_000).toISOString();
   const since60 = new Date(now - 60 * 86400_000).toISOString();
-  const cur = await sql<PostRow[]>`SELECT * FROM posts WHERE timestamp >= ${since30}`;
+  const cur = await sql<PostRow[]>`
+    SELECT * FROM posts WHERE user_id = ${userId} AND timestamp >= ${since30}
+  `;
   const prev = await sql<PostRow[]>`
-    SELECT * FROM posts WHERE timestamp >= ${since60} AND timestamp < ${since30}
+    SELECT * FROM posts
+    WHERE user_id = ${userId} AND timestamp >= ${since60} AND timestamp < ${since30}
   `;
   if (cur.length >= 3 && prev.length >= 3) {
     const avg = (rows: PostRow[]) => rows.reduce((a, p) => a + p.er, 0) / rows.length;
@@ -82,7 +86,9 @@ export async function computeAlerts(): Promise<Alert[]> {
   }
 
   // 4. Tasa de salida alta en historias (últimos 30 días).
-  const stories = await sql<StoryRow[]>`SELECT * FROM stories WHERE timestamp >= ${since30}`;
+  const stories = await sql<StoryRow[]>`
+    SELECT * FROM stories WHERE user_id = ${userId} AND timestamp >= ${since30}
+  `;
   const views = stories.reduce((a, st) => a + st.views, 0);
   const exits = stories.reduce((a, st) => a + st.exits, 0);
   if (views > 100 && exits / views > 0.25) {
@@ -95,7 +101,7 @@ export async function computeAlerts(): Promise<Alert[]> {
 
   // 5. Propuestas esperando revisión.
   const [pendingRow] = await sql<{ n: number }[]>`
-    SELECT COUNT(*)::int AS n FROM proposals WHERE status = 'pendiente'
+    SELECT COUNT(*)::int AS n FROM proposals WHERE user_id = ${userId} AND status = 'pendiente'
   `;
   if (pendingRow.n > 0) {
     alerts.push({
@@ -108,7 +114,8 @@ export async function computeAlerts(): Promise<Alert[]> {
   // 6. Piezas del calendario atrasadas (fecha pasada y no publicadas).
   const today = new Date().toISOString().slice(0, 10);
   const [overdueRow] = await sql<{ n: number }[]>`
-    SELECT COUNT(*)::int AS n FROM calendar_items WHERE fecha < ${today} AND estado != 'publicado'
+    SELECT COUNT(*)::int AS n FROM calendar_items
+    WHERE user_id = ${userId} AND fecha < ${today} AND estado != 'publicado'
   `;
   if (overdueRow.n > 0) {
     const n = overdueRow.n;

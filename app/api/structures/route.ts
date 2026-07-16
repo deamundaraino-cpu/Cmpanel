@@ -3,18 +3,22 @@ import { guard, fail } from "@/lib/api";
 import { getSql, StructureRow, StructureBeat } from "@/lib/db";
 
 export async function GET() {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const sql = getSql();
+  // Builtins globales (user_id NULL) + las propias del usuario.
   const rows = await sql<StructureRow[]>`
-    SELECT * FROM structures ORDER BY is_builtin DESC, id ASC
+    SELECT * FROM structures
+    WHERE user_id = ${auth.userId} OR user_id IS NULL
+    ORDER BY is_builtin DESC, id ASC
   `;
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  const { userId } = auth;
   try {
     const { nombre, descripcion, beats } = await req.json();
     if (typeof nombre !== "string" || !nombre.trim()) {
@@ -35,10 +39,10 @@ export async function POST(req: NextRequest) {
 
     const sql = getSql();
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO structures (created_at, nombre, descripcion, beats, is_builtin)
-      VALUES (${new Date().toISOString()}, ${nombre.trim()}, ${descripcion || ""},
+      INSERT INTO structures (user_id, created_at, nombre, descripcion, beats, is_builtin)
+      VALUES (${userId}, ${new Date().toISOString()}, ${nombre.trim()}, ${descripcion || ""},
         ${JSON.stringify(clean)}, 0)
-      ON CONFLICT (nombre) DO NOTHING
+      ON CONFLICT (user_id, nombre) DO NOTHING
       RETURNING id
     `;
     if (!row) return fail(new Error("Ya existe una estructura con ese nombre"), 400);

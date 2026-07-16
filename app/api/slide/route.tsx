@@ -5,12 +5,14 @@ import { renderSlide, Slide } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
 
 export async function GET(req: NextRequest) {
-  const g = await guard();
-  if (g) return g;
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
   const pid = Number(req.nextUrl.searchParams.get("pid"));
   const index = Number(req.nextUrl.searchParams.get("i") || 0);
   const sql = getSql();
-  const rows = await sql<ProposalRow[]>`SELECT * FROM proposals WHERE id = ${pid}`;
+  const rows = await sql<ProposalRow[]>`
+    SELECT * FROM proposals WHERE user_id = ${auth.userId} AND id = ${pid}
+  `;
   const proposal = rows[0];
   if (!proposal?.slides) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
@@ -23,6 +25,6 @@ export async function GET(req: NextRequest) {
     slide: slides[index],
     index,
     total: slides.length,
-    style: await buildBrandStyle(),
+    style: await buildBrandStyle(auth.userId),
   });
 }
