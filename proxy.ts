@@ -8,6 +8,8 @@ const PUBLIC_PATHS = new Set([
   "/registro",
   "/recuperar",
   "/restablecer",
+  "/privacidad",
+  "/eliminar-datos",
 ]);
 
 export async function proxy(request: NextRequest) {

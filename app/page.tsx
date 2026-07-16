@@ -89,7 +89,16 @@ export default async function LandingPage() {
       </section>
 
       <footer className="border-t border-zinc-800/60 py-8 text-center text-xs text-zinc-600">
-        Brandpanel — gestiona tu marca personal en Instagram con IA
+        <p>Brandpanel — gestiona tu marca personal en Instagram con IA</p>
+        <p className="mt-2">
+          <Link href="/privacidad" className="hover:text-zinc-400">
+            Privacidad
+          </Link>
+          {" · "}
+          <Link href="/eliminar-datos" className="hover:text-zinc-400">
+            Eliminación de datos
+          </Link>
+        </p>
       </footer>
     </main>
   );
