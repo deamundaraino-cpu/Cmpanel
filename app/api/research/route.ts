@@ -5,6 +5,7 @@ import { chatJson } from "@/lib/llm";
 import { getSetting } from "@/lib/settings";
 import { buildBrandBrief } from "@/lib/brand";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
+import { getTavilyKey } from "@/lib/appSettings";
 
 export const maxDuration = 120;
 
@@ -23,7 +24,7 @@ const PILAR_GUIDE: Record<Pilar, string> = {
 };
 
 async function tavilySearch(query: string): Promise<{ context: string; sources: string[] }> {
-  const key = process.env.TAVILY_API_KEY;
+  const key = await getTavilyKey();
   if (!key) return { context: "", sources: [] };
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",

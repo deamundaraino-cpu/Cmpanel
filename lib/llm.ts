@@ -1,4 +1,5 @@
 import { jsonrepair } from "jsonrepair";
+import { getAppSettings } from "./appSettings";
 
 export class LlmError extends Error {}
 
@@ -21,23 +22,31 @@ export const PROVIDERS: Record<string, { baseUrl: string; model: string; label: 
   custom: { baseUrl: "", model: "", label: "Personalizado" },
 };
 
-// La IA es del dueño de la plataforma: se configura solo con variables de
-// entorno del servidor (los usuarios no ven ni ponen llaves).
-function getConfig() {
-  const provider = process.env.LLM_PROVIDER || "groq";
-  const preset = PROVIDERS[provider] || PROVIDERS.groq;
-  const baseUrl = process.env.LLM_BASE_URL || preset.baseUrl;
-  const model = process.env.LLM_MODEL || preset.model;
-  const apiKey = process.env.LLM_API_KEY || "";
-  if (!apiKey) {
-    throw new LlmError("La IA no está configurada en el servidor (falta LLM_API_KEY).");
+// La IA es del dueño de la plataforma: el super admin puede fijar proveedor,
+// modelo y llave desde /admin (tabla app_settings); sin override en BD se
+// usan las variables de entorno. Los editores no ven ni ponen llaves.
+export async function getLlmConfig() {
+  let db: Record<string, string | null> = {};
+  try {
+    db = await getAppSettings(["llm_provider", "llm_api_key", "llm_model", "llm_base_url"]);
+  } catch {
+    // Tabla app_settings aún no creada: solo env vars.
   }
-  if (!baseUrl) throw new LlmError("Falta la URL base del proveedor de IA (LLM_BASE_URL).");
-  return { baseUrl, model, apiKey };
+  const provider = db.llm_provider || process.env.LLM_PROVIDER || "groq";
+  const preset = PROVIDERS[provider] || PROVIDERS.groq;
+  const baseUrl = db.llm_base_url || process.env.LLM_BASE_URL || preset.baseUrl;
+  const model = db.llm_model || process.env.LLM_MODEL || preset.model;
+  const apiKey = db.llm_api_key || process.env.LLM_API_KEY || "";
+  const source: "db" | "env" = db.llm_api_key || db.llm_provider ? "db" : "env";
+  if (!apiKey) {
+    throw new LlmError("La IA no está configurada (ponla en /admin o en las env del servidor).");
+  }
+  if (!baseUrl) throw new LlmError("Falta la URL base del proveedor de IA.");
+  return { provider, baseUrl, model, apiKey, source };
 }
 
 export async function chat(system: string, user: string): Promise<string> {
-  const { baseUrl, model, apiKey } = getConfig();
+  const { baseUrl, model, apiKey } = await getLlmConfig();
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {

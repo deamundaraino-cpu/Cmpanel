@@ -51,6 +51,17 @@ CREATE TABLE IF NOT EXISTS clients (
   last_synced_at TEXT
 );
 
+-- ————— Configuración global de la plataforma (solo super admin) —————
+-- Overrides de la IA (llm_provider/llm_api_key/llm_model/llm_base_url,
+-- tavily_api_key); sin fila = se usan las variables de entorno.
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
 -- ————— Cuotas de IA por usuario y día (compartidas entre sus clientes) —————
 
 CREATE TABLE IF NOT EXISTS ai_usage (

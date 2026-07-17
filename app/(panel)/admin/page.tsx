@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getSql } from "@/lib/db";
 import { DEFAULT_AI_DAILY_LIMIT } from "@/lib/quota";
 import AdminUserRow from "@/components/AdminUserRow";
+import AdminAiPanel from "@/components/AdminAiPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,10 @@ export default async function AdminPage() {
         defecto: {DEFAULT_AI_DAILY_LIMIT}/día — déjalo vacío para usarlo, o
         pon un número para personalizar.
       </p>
+
+      <div className="mt-6">
+        <AdminAiPanel />
+      </div>
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-800">
         <table className="w-full min-w-[820px] text-sm">

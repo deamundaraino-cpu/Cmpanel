@@ -3,6 +3,7 @@ import { getSql } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { requireClient } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
+import { getTavilyKey } from "@/lib/appSettings";
 import ResearchControl from "@/components/ResearchControl";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function IdeasPage({
   ) as unknown as IdeaRow[];
   const s = await getSettings(clientId, ["brand_niche"]);
   const niche = s.brand_niche;
-  const hasTavily = !!process.env.TAVILY_API_KEY;
+  const hasTavily = !!(await getTavilyKey());
 
   return (
     <div className="mx-auto max-w-4xl">
