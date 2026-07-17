@@ -12,6 +12,7 @@ import {
   clampQuality,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
+import { ensurePipelineItem } from "@/lib/pipeline";
 
 export const maxDuration = 120;
 
@@ -121,10 +122,14 @@ export async function PATCH(
     if (!["aprobada", "rechazada", "pendiente"].includes(status)) {
       return fail(new Error("Estado inválido"), 400);
     }
-    await sql`
+    const updated = await sql<ProposalRow[]>`
       UPDATE proposals SET status = ${status}
       WHERE client_id = ${clientId} AND id = ${Number(id)}
+      RETURNING *
     `;
+    if (status === "aprobada" && updated[0]) {
+      await ensurePipelineItem(updated[0]);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);

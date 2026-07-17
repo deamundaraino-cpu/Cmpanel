@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fail } from "@/lib/api";
 import { getSql, ProposalRow } from "@/lib/db";
+import { ensurePipelineItem } from "@/lib/pipeline";
 
 /**
  * Decisión del cliente sobre una propuesta compartida (público, sin sesión).
@@ -22,15 +23,18 @@ export async function POST(
 
     const sql = getSql();
     const rows = await sql<ProposalRow[]>`
-      SELECT id FROM proposals WHERE share_token = ${token}
+      SELECT * FROM proposals WHERE share_token = ${token}
     `;
     if (!rows[0]) return fail(new Error("Enlace no válido"), 404);
 
     if (decision === "aprobar") {
-      await sql`
+      const updated = await sql<ProposalRow[]>`
         UPDATE proposals SET status = 'aprobada', client_feedback = NULL
         WHERE share_token = ${token}
+        RETURNING *
       `;
+      // La aprobación del cliente mete la pieza al Pipeline (fase «idea»).
+      if (updated[0]) await ensurePipelineItem(updated[0]);
       return NextResponse.json({ ok: true, status: "aprobada" });
     }
 
