@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql, CommentRow } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
 import { getSetting } from "@/lib/settings";
@@ -45,14 +45,14 @@ async function tavilySearch(query: string): Promise<{ context: string; sources: 
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, clientId } = auth;
   try {
     const { pilar, source } = await req.json().catch(() => ({}));
     const targetPilar: Pilar | null = PILARES.includes(pilar) ? pilar : null;
     const sql = getSql();
-    const brief = await buildBrandBrief(userId);
+    const brief = await buildBrandBrief(clientId);
 
     let context = "";
     let sources: string[] = [];
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
       // Minería de comentarios reales: dolores y preguntas literales de la audiencia.
       const comments = await sql<(CommentRow & { caption: string | null })[]>`
         SELECT c.*, p.caption FROM comments c
-        LEFT JOIN posts p ON p.user_id = c.user_id AND p.id = c.post_id
-        WHERE c.user_id = ${userId}
+        LEFT JOIN posts p ON p.client_id = c.client_id AND p.id = c.post_id
+        WHERE c.client_id = ${clientId}
         ORDER BY c.like_count DESC, c.timestamp DESC
         LIMIT 60
       `;
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
           .join("\n");
     } else {
       const niche =
-        (await getSetting(userId, "brand_niche")) || "marca personal y negocios digitales";
+        (await getSetting(clientId, "brand_niche")) || "marca personal y negocios digitales";
       const query = `temas y preguntas en tendencia en redes sociales sobre ${niche} ${new Date().getFullYear()}`;
       const web = await tavilySearch(query);
       context = web.context;
@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
         ? idea.pilar
         : targetPilar || "crecimiento";
       await sql`
-        INSERT INTO ideas (user_id, created_at, tema, angulo, formato, razon, fuentes, pilar)
-        VALUES (${userId}, ${now}, ${idea.tema}, ${idea.angulo}, ${idea.formato}, ${idea.razon},
+        INSERT INTO ideas (client_id, created_at, tema, angulo, formato, razon, fuentes, pilar)
+        VALUES (${clientId}, ${now}, ${idea.tema}, ${idea.angulo}, ${idea.formato}, ${idea.razon},
           ${fromComments ? '["comentarios"]' : JSON.stringify(sources)}, ${ideaPilar})
       `;
     }

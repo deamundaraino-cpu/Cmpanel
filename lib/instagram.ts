@@ -4,8 +4,8 @@ const BASE = "https://graph.instagram.com/v23.0";
 
 export class IgError extends Error {}
 
-async function igFetch(userId: string, path: string, params: Record<string, string>) {
-  const token = await getSetting(userId, "ig_token");
+async function igFetch(clientId: number, path: string, params: Record<string, string>) {
+  const token = await getSetting(clientId, "ig_token");
   if (!token) throw new IgError("No hay token de Instagram configurado. Ve a Ajustes.");
   const url = new URL(`${BASE}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -25,8 +25,8 @@ export type IgProfile = {
   media_count: number;
 };
 
-export async function getProfile(userId: string): Promise<IgProfile> {
-  const me = await igFetch(userId, "/me", {
+export async function getProfile(clientId: number): Promise<IgProfile> {
+  const me = await igFetch(clientId, "/me", {
     fields: "user_id,username,followers_count,media_count",
   });
   return me as IgProfile;
@@ -45,7 +45,7 @@ export type IgMedia = {
   comments_count?: number;
 };
 
-export async function getMedia(userId: string, maxPosts = 100): Promise<IgMedia[]> {
+export async function getMedia(clientId: number, maxPosts = 100): Promise<IgMedia[]> {
   const fields =
     "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count";
   let out: IgMedia[] = [];
@@ -53,7 +53,7 @@ export async function getMedia(userId: string, maxPosts = 100): Promise<IgMedia[
   while (out.length < maxPosts) {
     const params: Record<string, string> = { fields, limit: "25" };
     if (after) params.after = after;
-    const page = await igFetch(userId, "/me/media", params);
+    const page = await igFetch(clientId, "/me/media", params);
     out = out.concat(page.data || []);
     after = page.paging?.cursors?.after;
     if (!after || !page.data?.length) break;
@@ -69,7 +69,7 @@ export type IgInsights = {
   total_interactions: number;
 };
 
-export async function getMediaInsights(userId: string, mediaId: string): Promise<Partial<IgInsights>> {
+export async function getMediaInsights(clientId: number, mediaId: string): Promise<Partial<IgInsights>> {
   const metricSets = [
     "reach,saved,shares,views,total_interactions",
     "reach,saved,total_interactions",
@@ -77,7 +77,7 @@ export async function getMediaInsights(userId: string, mediaId: string): Promise
   ];
   for (const metric of metricSets) {
     try {
-      const res = await igFetch(userId, `/${mediaId}/insights`, { metric });
+      const res = await igFetch(clientId, `/${mediaId}/insights`, { metric });
       const out: Partial<IgInsights> = {};
       for (const item of res.data || []) {
         const value = item.total_value?.value ?? item.values?.[0]?.value ?? 0;
@@ -101,8 +101,8 @@ export type IgStory = {
 };
 
 /** Historias activas (Instagram solo expone las de las últimas 24 h). */
-export async function getStories(userId: string): Promise<IgStory[]> {
-  const res = await igFetch(userId, "/me/stories", {
+export async function getStories(clientId: number): Promise<IgStory[]> {
+  const res = await igFetch(clientId, "/me/stories", {
     fields: "id,media_type,media_url,thumbnail_url,caption,timestamp",
   });
   return (res.data || []) as IgStory[];
@@ -119,7 +119,7 @@ export type IgStoryInsights = {
   taps_back: number;
 };
 
-export async function getStoryInsights(userId: string, storyId: string): Promise<Partial<IgStoryInsights>> {
+export async function getStoryInsights(clientId: number, storyId: string): Promise<Partial<IgStoryInsights>> {
   const out: Partial<IgStoryInsights> = {};
 
   // Métricas simples, con fallback si alguna no está disponible para la cuenta.
@@ -130,7 +130,7 @@ export async function getStoryInsights(userId: string, storyId: string): Promise
   ];
   for (const metric of metricSets) {
     try {
-      const res = await igFetch(userId, `/${storyId}/insights`, {
+      const res = await igFetch(clientId, `/${storyId}/insights`, {
         metric,
         metric_type: "total_value",
       });
@@ -146,7 +146,7 @@ export async function getStoryInsights(userId: string, storyId: string): Promise
 
   // Navegación (salidas y taps) con breakdown; opcional, no bloquea si falla.
   try {
-    const res = await igFetch(userId, `/${storyId}/insights`, {
+    const res = await igFetch(clientId, `/${storyId}/insights`, {
       metric: "navigation",
       metric_type: "total_value",
       breakdown: "story_navigation_action_type",
@@ -177,9 +177,9 @@ export type IgComment = {
 };
 
 /** Comentarios de un post (para minería de ideas). */
-export async function getComments(userId: string, mediaId: string, limit = 25): Promise<IgComment[]> {
+export async function getComments(clientId: number, mediaId: string, limit = 25): Promise<IgComment[]> {
   try {
-    const res = await igFetch(userId, `/${mediaId}/comments`, {
+    const res = await igFetch(clientId, `/${mediaId}/comments`, {
       fields: "id,text,like_count,timestamp",
       limit: String(limit),
     });
@@ -191,8 +191,8 @@ export async function getComments(userId: string, mediaId: string, limit = 25): 
 }
 
 /** Renueva el token de larga duración (caduca a los 60 días). */
-export async function refreshToken(userId: string): Promise<void> {
-  const token = await getSetting(userId, "ig_token");
+export async function refreshToken(clientId: number): Promise<void> {
+  const token = await getSetting(clientId, "ig_token");
   if (!token) throw new IgError("No hay token que renovar.");
   const url = new URL("https://graph.instagram.com/refresh_access_token");
   url.searchParams.set("grant_type", "ig_refresh_token");
@@ -202,6 +202,6 @@ export async function refreshToken(userId: string): Promise<void> {
   if (!res.ok || json.error) {
     throw new IgError(json.error?.message || "No se pudo renovar el token.");
   }
-  await setSetting(userId, "ig_token", json.access_token);
-  await setSetting(userId, "ig_token_fetched_at", new Date().toISOString());
+  await setSetting(clientId, "ig_token", json.access_token);
+  await setSetting(clientId, "ig_token_fetched_at", new Date().toISOString());
 }

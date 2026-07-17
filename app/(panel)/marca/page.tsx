@@ -1,22 +1,22 @@
 import BrandForm from "@/components/BrandForm";
 import { buildBrandBrief, hasBrandBrief } from "@/lib/brand";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function BrandPage() {
-  const { userId } = await requireUser();
-  const complete = await hasBrandBrief(userId);
-  const brief = await buildBrandBrief(userId);
+  const { clientId } = await requireClient();
+  const complete = await hasBrandBrief(clientId);
+  const brief = await buildBrandBrief(clientId);
 
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">Cerebro de marca</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-        Todo lo que la IA necesita para entenderte: identidad, cliente ideal,
-        líneas de contenido y objetivos. Esta ficha se inyecta automáticamente
-        cada vez que el sistema analiza tus métricas, investiga tu nicho o
-        diseña una propuesta de carrusel.
+        Todo lo que la IA necesita para entender al CLIENTE ACTIVO: identidad,
+        cliente ideal, líneas de contenido y objetivos. Esta ficha se inyecta
+        automáticamente cada vez que el sistema analiza sus métricas, investiga
+        su nicho o diseña una propuesta.
       </p>
 
       <div className="mt-6">
@@ -25,7 +25,7 @@ export default async function BrandPage() {
 
       <div className="mt-6 rounded-xl border border-dashed border-zinc-700 bg-zinc-950/60 p-5">
         <p className="text-xs font-medium text-zinc-400">
-          👁️ Así ve tu marca la IA ahora mismo
+          👁️ Así ve la IA a este cliente ahora mismo
         </p>
         {complete ? (
           <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-zinc-500">

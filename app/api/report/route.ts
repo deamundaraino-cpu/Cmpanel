@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql, PostRow } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
@@ -15,18 +15,18 @@ type ReportContent = {
 };
 
 export async function GET() {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   const rows = await getSql()`
-    SELECT * FROM reports WHERE user_id = ${auth.userId} ORDER BY id DESC LIMIT 10
+    SELECT * FROM reports WHERE client_id = ${auth.clientId} ORDER BY id DESC LIMIT 10
   `;
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, clientId } = auth;
   try {
     const { days } = await req.json().catch(() => ({ days: 30 }));
     const periodDays = [7, 30, 90, 365].includes(Number(days)) ? Number(days) : 30;
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const since = new Date(Date.now() - periodDays * 86400_000).toISOString();
 
     const posts = await sql<PostRow[]>`
-      SELECT * FROM posts WHERE user_id = ${userId} AND timestamp >= ${since} ORDER BY er DESC
+      SELECT * FROM posts WHERE client_id = ${clientId} AND timestamp >= ${since} ORDER BY er DESC
     `;
 
     if (posts.length < 2) {
@@ -63,15 +63,15 @@ export async function POST(req: NextRequest) {
     const quota = await consumeQuota(userId, "report");
     if (!quota.ok) return quotaExceeded(quota);
 
-    const brief = await buildBrandBrief(userId);
+    const brief = await buildBrandBrief(clientId);
     const report = await chatJson<ReportContent>(
       `Eres un CM senior que entrega informes de rendimiento ejecutivos, claros y accionables en español. Nada de relleno corporativo.\n\nFicha de marca:\n${brief}`,
       `Informe de los últimos ${periodDays} días:\n- Posts publicados: ${posts.length}\n- Alcance total: ${totalReach}\n- Engagement medio: ${(avgEr * 100).toFixed(2)}%\n- Posts ganadores: ${winners}\n\nTop 3 posts:\n${JSON.stringify(top, null, 1)}\n\nPosts más flojos:\n${JSON.stringify(bottom, null, 1)}\n\nDevuelve JSON:\n{"resumen": "diagnóstico ejecutivo en 2-3 frases", "aciertos": ["qué funcionó y por qué, con datos"], "riesgos": ["qué vigilar o corregir"], "recomendaciones": ["acciones concretas para el próximo periodo"]}`
     );
 
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO reports (user_id, created_at, period_days, content)
-      VALUES (${userId}, ${new Date().toISOString()}, ${periodDays}, ${JSON.stringify(report)})
+      INSERT INTO reports (client_id, created_at, period_days, content)
+      VALUES (${clientId}, ${new Date().toISOString()}, ${periodDays}, ${JSON.stringify(report)})
       RETURNING id
     `;
 

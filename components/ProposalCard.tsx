@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Slide = { titulo: string; cuerpo: string };
-type Beat = { seccion: string; texto: string };
+type Beat = { seccion: string; texto: string; edicion?: string };
 
 export default function ProposalCard({
   id,
@@ -17,6 +17,7 @@ export default function ProposalCard({
   hashtags,
   quality,
   qualityNotes,
+  clientFeedback,
 }: {
   id: number;
   status: string;
@@ -28,6 +29,7 @@ export default function ProposalCard({
   hashtags: string[];
   quality?: number | null;
   qualityNotes?: string | null;
+  clientFeedback?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -36,17 +38,20 @@ export default function ProposalCard({
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const isScript = formato === "guion_video";
 
-  async function regenerate() {
-    if (!feedback.trim()) return;
+  async function regenerate(text?: string) {
+    const fb = (text ?? feedback).trim();
+    if (!fb) return;
     setBusy(true);
     setRegenError(null);
     try {
       const res = await fetch(`/api/proposals/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "regenerate", feedback }),
+        body: JSON.stringify({ action: "regenerate", feedback: fb }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -74,6 +79,27 @@ export default function ProposalCard({
     router.refresh();
   }
 
+  async function share() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "share" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.path) {
+        const url = `${window.location.origin}${json.path}`;
+        setShareUrl(url);
+        await navigator.clipboard.writeText(url).catch(() => {});
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove() {
     if (!confirm("¿Eliminar esta propuesta?")) return;
     setBusy(true);
@@ -83,7 +109,12 @@ export default function ProposalCard({
   }
 
   async function copyScript() {
-    const text = beats.map((b) => `[${b.seccion.toUpperCase()}]\n${b.texto}`).join("\n\n");
+    const text = beats
+      .map(
+        (b) =>
+          `[${b.seccion.toUpperCase()}]\n${b.texto}${b.edicion ? `\n🎬 ${b.edicion}` : ""}`
+      )
+      .join("\n\n");
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -141,6 +172,14 @@ export default function ProposalCard({
               </button>
             </>
           )}
+          <button
+            onClick={share}
+            disabled={busy}
+            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+            title="Genera un enlace público para que tu cliente apruebe o pida cambios sin cuenta"
+          >
+            {shareCopied ? "Enlace copiado ✓" : "🔗 Compartir con cliente"}
+          </button>
           {isScript && (
             <button
               onClick={copyScript}
@@ -175,6 +214,35 @@ export default function ProposalCard({
         </div>
       </div>
 
+      {shareUrl && (
+        <div className="mt-3 rounded-lg border border-indigo-900/50 bg-indigo-950/20 px-3 py-2 text-xs text-zinc-300">
+          Enlace para tu cliente (copiado al portapapeles):{" "}
+          <a
+            href={shareUrl}
+            target="_blank"
+            className="break-all text-indigo-400 hover:text-indigo-300"
+          >
+            {shareUrl}
+          </a>
+        </div>
+      )}
+
+      {clientFeedback && (
+        <div className="mt-3 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+          <p className="text-xs font-semibold text-amber-300">
+            💬 Tu cliente pidió cambios
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-300">{clientFeedback}</p>
+          <button
+            onClick={() => regenerate(clientFeedback)}
+            disabled={busy}
+            className="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {busy ? "Regenerando…" : "Regenerar aplicando su feedback"}
+          </button>
+        </div>
+      )}
+
       {showFeedback && (
         <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
           <textarea
@@ -187,7 +255,7 @@ export default function ProposalCard({
           {regenError && <p className="mt-1 text-xs text-red-400">{regenError}</p>}
           <div className="mt-2 flex gap-2">
             <button
-              onClick={regenerate}
+              onClick={() => regenerate()}
               disabled={busy || !feedback.trim()}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
             >
@@ -211,6 +279,11 @@ export default function ProposalCard({
                 {b.seccion}
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">{b.texto}</p>
+              {b.edicion && (
+                <p className="mt-2 border-t border-zinc-800/70 pt-2 text-xs text-zinc-500">
+                  🎬 {b.edicion}
+                </p>
+              )}
             </div>
           ))}
         </div>

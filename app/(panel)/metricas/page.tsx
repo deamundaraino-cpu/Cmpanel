@@ -9,7 +9,7 @@ import {
   postingHeatmap,
 } from "@/lib/metrics";
 import { computeAlerts } from "@/lib/alerts";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 import BarChart from "@/components/charts/BarChart";
 import LineChart from "@/components/charts/LineChart";
 import DeltaTile from "@/components/charts/DeltaTile";
@@ -30,7 +30,7 @@ export default async function MetricsPage({
 }) {
   const sp = await searchParams;
   const days = [7, 30, 90, 365].includes(Number(sp.days)) ? Number(sp.days) : 30;
-  const { userId } = await requireUser();
+  const { clientId } = await requireClient();
   const sql = getSql();
 
   const now = Date.now();
@@ -39,11 +39,11 @@ export default async function MetricsPage({
 
   const currentPosts = await sql<PostRow[]>`
     SELECT * FROM posts
-    WHERE user_id = ${userId} AND timestamp >= ${sinceCurrent} ORDER BY timestamp ASC
+    WHERE client_id = ${clientId} AND timestamp >= ${sinceCurrent} ORDER BY timestamp ASC
   `;
   const previousPosts = await sql<PostRow[]>`
     SELECT * FROM posts
-    WHERE user_id = ${userId} AND timestamp >= ${sincePrevious} AND timestamp < ${sinceCurrent}
+    WHERE client_id = ${clientId} AND timestamp >= ${sincePrevious} AND timestamp < ${sinceCurrent}
   `;
 
   const curReach = currentPosts.reduce((a, p) => a + p.reach, 0);
@@ -61,15 +61,15 @@ export default async function MetricsPage({
   const formats = formatBreakdown(currentPosts);
   const weekdays = dayOfWeekBreakdown(currentPosts);
   const heatmap = postingHeatmap(currentPosts);
-  const alerts = await computeAlerts(userId);
+  const alerts = await computeAlerts(clientId);
 
   const stories = await sql<StoryRow[]>`
     SELECT * FROM stories
-    WHERE user_id = ${userId} AND timestamp >= ${sinceCurrent} ORDER BY timestamp DESC
+    WHERE client_id = ${clientId} AND timestamp >= ${sinceCurrent} ORDER BY timestamp DESC
   `;
   const prevStories = await sql<StoryRow[]>`
     SELECT * FROM stories
-    WHERE user_id = ${userId} AND timestamp >= ${sincePrevious} AND timestamp < ${sinceCurrent}
+    WHERE client_id = ${clientId} AND timestamp >= ${sincePrevious} AND timestamp < ${sinceCurrent}
   `;
 
   const storyViews = stories.reduce((a, s) => a + s.views, 0);
@@ -88,13 +88,13 @@ export default async function MetricsPage({
     SELECT c.*, COUNT(p.id)::int AS posts_count, COALESCE(SUM(p.reach), 0)::int AS total_reach,
       COALESCE(AVG(p.er), 0)::float AS avg_er
     FROM campaigns c
-    LEFT JOIN posts p ON p.user_id = c.user_id AND p.campaign_id = c.id
-    WHERE c.user_id = ${userId}
+    LEFT JOIN posts p ON p.client_id = c.client_id AND p.campaign_id = c.id
+    WHERE c.client_id = ${clientId}
     GROUP BY c.id ORDER BY c.created_at DESC
   `) as unknown as CampaignRollup[];
 
   const reports = await sql<ReportRow[]>`
-    SELECT * FROM reports WHERE user_id = ${userId} ORDER BY id DESC LIMIT 5
+    SELECT * FROM reports WHERE client_id = ${clientId} ORDER BY id DESC LIMIT 5
   `;
 
   return (

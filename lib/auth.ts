@@ -1,18 +1,29 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getSupabaseServer } from "./supabase";
 import { getSql } from "./db";
+
+/** Cookie httpOnly con el id del cliente activo del editor. */
+export const CLIENT_COOKIE = "bp_client";
 
 export type Auth = {
   userId: string;
   email: string;
   role: "user" | "admin";
   onboarded: boolean;
+  /** Cliente activo (null si el editor aún no creó ninguno). */
+  clientId: number | null;
+  clientNombre: string | null;
 };
+
+/** Auth con cliente activo garantizado (para páginas/APIs de contenido). */
+export type ClientAuth = Auth & { clientId: number; clientNombre: string };
 
 /**
  * Identidad de la petición actual (JWT de Supabase verificado en local
- * + fila espejo en public.users para rol/onboarding). null si no hay sesión.
+ * + fila espejo en public.users para rol/onboarding + cliente activo
+ * resuelto desde la cookie bp_client). null si no hay sesión.
  */
 export async function getAuth(): Promise<Auth | null> {
   const supabase = await getSupabaseServer();
@@ -35,11 +46,25 @@ export async function getAuth(): Promise<Auth | null> {
     `;
   }
   const row = rows[0] as { role: string; onboarded: number };
+
+  // Cliente activo: cookie válida → ese; si no, el más antiguo activo.
+  const cookieStore = await cookies();
+  const cookieClientId = Number(cookieStore.get(CLIENT_COOKIE)?.value || NaN);
+  const clients = await sql<{ id: number; nombre: string }[]>`
+    SELECT id, nombre FROM clients
+    WHERE owner_user_id = ${userId} AND estado = 'activo'
+    ORDER BY created_at ASC, id ASC
+  `;
+  const active =
+    clients.find((c) => c.id === cookieClientId) ?? clients[0] ?? null;
+
   return {
     userId,
     email,
     role: row.role === "admin" ? "admin" : "user",
     onboarded: Boolean(row.onboarded),
+    clientId: active?.id ?? null,
+    clientNombre: active?.nombre ?? null,
   };
 }
 
@@ -48,6 +73,16 @@ export async function requireUser(): Promise<Auth> {
   const auth = await getAuth();
   if (!auth) redirect("/login");
   return auth;
+}
+
+/**
+ * Para páginas de contenido: exige sesión Y un cliente activo.
+ * Sin clientes todavía → al onboarding (donde se crea el primero).
+ */
+export async function requireClient(): Promise<ClientAuth> {
+  const auth = await requireUser();
+  if (auth.clientId == null) redirect("/onboarding");
+  return auth as ClientAuth;
 }
 
 /** Para páginas/API solo de admin. */

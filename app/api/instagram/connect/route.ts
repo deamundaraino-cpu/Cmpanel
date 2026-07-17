@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { guard } from "@/lib/api";
+import { guardClient } from "@/lib/api";
 import { signPayload } from "@/lib/auth";
 
 const SCOPES = [
@@ -10,12 +10,13 @@ const SCOPES = [
 ].join(",");
 
 /**
- * Inicia el OAuth de Instagram (Instagram API with Instagram Login).
- * Mientras la app de Meta esté en modo desarrollo, solo funciona para
- * cuentas añadidas como testers; tras el App Review, para cualquiera.
+ * Inicia el OAuth de Instagram (Instagram API with Instagram Login) para el
+ * CLIENTE ACTIVO del editor. Mientras la app de Meta esté en modo desarrollo,
+ * solo funciona para cuentas añadidas como testers; tras el App Review, para
+ * cualquiera.
  */
 export async function GET() {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
 
   const appId = process.env.INSTAGRAM_APP_ID;
@@ -27,9 +28,11 @@ export async function GET() {
     );
   }
 
-  // state firmado: evita CSRF y ata el callback a este usuario.
+  // state firmado: evita CSRF y ata el callback a este usuario Y este cliente
+  // (si el editor cambia de cliente en otra pestaña a mitad del OAuth, el
+  // token igual se guarda en el cliente desde el que se inició).
   const nonce = randomBytes(12).toString("hex");
-  const payload = `${auth.userId}.${nonce}`;
+  const payload = `${auth.userId}.${auth.clientId}.${nonce}`;
   const state = `${payload}.${signPayload(payload)}`;
 
   const url = new URL("https://www.instagram.com/oauth/authorize");

@@ -1,26 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   const month = req.nextUrl.searchParams.get("month"); // YYYY-MM
   const sql = getSql();
   const rows = month
     ? await sql`
         SELECT * FROM calendar_items
-        WHERE user_id = ${auth.userId} AND fecha LIKE ${month + "%"}
+        WHERE client_id = ${auth.clientId} AND fecha LIKE ${month + "%"}
         ORDER BY fecha ASC
       `
     : await sql`
-        SELECT * FROM calendar_items WHERE user_id = ${auth.userId} ORDER BY fecha ASC
+        SELECT * FROM calendar_items WHERE client_id = ${auth.clientId} ORDER BY fecha ASC
       `;
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   try {
     const { fecha, titulo, formato, campaign_id, notas } = await req.json();
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
     }
     const sql = getSql();
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO calendar_items (user_id, created_at, fecha, titulo, formato, estado, campaign_id, notas)
-      VALUES (${auth.userId}, ${new Date().toISOString()}, ${fecha}, ${titulo.trim()},
+      INSERT INTO calendar_items (client_id, created_at, fecha, titulo, formato, estado, campaign_id, notas)
+      VALUES (${auth.clientId}, ${new Date().toISOString()}, ${fecha}, ${titulo.trim()},
         ${formato || "carrusel"}, 'idea', ${campaign_id || null}, ${notas || ""})
       RETURNING id
     `;

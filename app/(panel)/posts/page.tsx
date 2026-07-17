@@ -1,5 +1,5 @@
 import { getSql, PostRow, CampaignRow } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
 import CampaignSelect from "@/components/CampaignSelect";
 
@@ -16,14 +16,14 @@ function scoreColor(score: number | null) {
 }
 
 export default async function PostsPage() {
-  const { userId } = await requireUser();
+  const { clientId } = await requireClient();
   const sql = getSql();
   const posts = await sql<PostRow[]>`
-    SELECT * FROM posts WHERE user_id = ${userId} ORDER BY timestamp DESC
+    SELECT * FROM posts WHERE client_id = ${clientId} ORDER BY timestamp DESC
   `;
   const campaignRows = await sql<CampaignRow[]>`
     SELECT * FROM campaigns
-    WHERE user_id = ${userId} AND estado = 'activa' ORDER BY created_at DESC
+    WHERE client_id = ${clientId} AND estado = 'activa' ORDER BY created_at DESC
   `;
   const campaigns = campaignRows.map((c) => ({ id: c.id, nombre: c.nombre }));
 

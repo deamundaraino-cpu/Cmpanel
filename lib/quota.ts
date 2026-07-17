@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSql } from "./db";
 
-/** Operaciones de IA por usuario y día (todas las kinds suman al mismo límite). */
-export const DEFAULT_AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT || 20);
+/**
+ * Operaciones de IA por usuario y día (todas las kinds suman al mismo límite).
+ * El cupo es del EDITOR, compartido entre todos sus clientes — por eso el
+ * default es más alto que cuando la app era de una sola marca.
+ */
+export const DEFAULT_AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT || 40);
 
 export type QuotaResult =
   | { ok: true; used: number; limit: number }

@@ -39,7 +39,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard title="Brandpanel" subtitle="Tu CM con IA para Instagram">
+    <AuthCard title="Brandpanel" subtitle="El panel multi-cliente para editores de contenido">
       <form onSubmit={submit} className="mt-4">
         <input
           type="email"

@@ -1,89 +1,91 @@
-# Panel de Marca — Guía de puesta en marcha
+# Brandpanel — Guía (beta cerrada)
 
-Tu CM con IA para Instagram: mide tus publicaciones, las califica, te recomienda,
-investiga tu nicho y te propone carruseles que tú apruebas y publicas a mano.
+El centro de mando para **editores de video y gestores de contenido que
+trabajan con varios clientes en Instagram**: mide las publicaciones de cada
+cliente, las califica, propone ideas y genera guiones de video (con notas de
+edición) y carruseles que el cliente final aprueba con un enlace, sin cuenta.
 
-## Arrancar la plataforma
-
-```bash
-cd brandpanel
-npm run build && npm run start   # producción, en http://localhost:3000
-# o durante desarrollo: npm run dev
-```
-
-**Contraseña de acceso:** `adshouse2026` (cámbiala en `.env.local`, variable `APP_PASSWORD`).
+**Producción:** https://cmpanel-liart.vercel.app
+**Local:** `cd brandpanel && npm run dev` (http://localhost:3000)
 
 ---
 
-## Paso 1 — Conectar tu Instagram (10 min, gratis)
+## Modelo mental
 
-Requisito: tu cuenta de Instagram debe ser **profesional** (Creador o Empresa).
-Se cambia gratis en la app: Configuración → Tipo de cuenta y herramientas.
+- **Tú (editor/agencia)** tienes una cuenta con la que gestionas **N clientes**.
+- **Cada cliente** tiene su propio Instagram conectado, su ficha de marca
+  (🧠 Marca), sus métricas, ideas, propuestas, campañas y calendario —
+  totalmente separados del resto.
+- **Tu librería de Estructuras** de guion y tu cupo diario de IA son tuyos,
+  compartidos entre todos tus clientes.
+- El **cliente activo** se cambia desde el selector de la barra lateral o en
+  la página «Clientes». Todo lo que ves y generas pertenece al cliente activo.
 
-1. Entra en [developers.facebook.com](https://developers.facebook.com) con tu Facebook y crea una cuenta de desarrollador si no la tienes.
-2. **Mis apps → Crear app** → caso de uso: *"Administrar todo en tu cuenta de Instagram"* (o añade el producto **Instagram** a una app en blanco).
-3. En el panel de la app: **Instagram → Configuración de la API con inicio de sesión de Instagram**.
-4. En la sección **Generar tokens de acceso**: añade tu cuenta de Instagram y pulsa **Generar token**. Inicia sesión con tu Instagram y copia el token (empieza por `IGAA...`). Es un token de larga duración (60 días).
-5. Pega el token en **Ajustes → Conexión con Instagram** y pulsa **Probar conexión**. Debe aparecer tu @usuario y tus seguidores.
+## Alta de un beta tester (lo haces tú, dueño de la plataforma)
 
-> La app puede quedarse en "modo desarrollo" para siempre: como solo la usas tú
-> con tu propia cuenta, **no necesitas pasar la revisión de Meta**.
+1. Comparte la URL + el **código de invitación** (`BETA_INVITE_CODE` en las
+   env de Vercel). Sin código no hay registro.
+2. Para que pueda conectar el Instagram de un cliente por OAuth mientras la
+   app de Meta está en modo desarrollo: añade esa cuenta de IG como **tester**
+   en developers.facebook.com → tu app → Roles. (Plan B sin invitación: pegar
+   un token manual en Ajustes → Avanzado.)
+3. Vigila su consumo de IA los primeros días en `/admin` (default:
+   40 ops/día por editor, ajustable por usuario o con `AI_DAILY_LIMIT`).
 
-**Renovación:** el token caduca a los 60 días. Pulsa **Renovar token** en Ajustes
-una vez al mes y queda renovado otros 60 días.
+## Flujo de trabajo del editor
 
-## Paso 2 — Conectar la IA gratuita (5 min)
-
-Opción recomendada: **Groq** (gratis, rápido).
-
-1. Entra en [console.groq.com](https://console.groq.com) → crea cuenta → **API Keys** → crea una clave (`gsk_...`).
-2. Pégala en **Ajustes → Proveedor de IA** con proveedor "Groq" y pulsa **Probar IA**.
-
-Alternativas igual de válidas (mismo campo, cambia el proveedor en el desplegable):
-- **OpenRouter** ([openrouter.ai/keys](https://openrouter.ai/keys)) — usa modelos con sufijo `:free`.
-- **Google Gemini** ([aistudio.google.com](https://aistudio.google.com)) — capa gratuita amplia.
-
-## Paso 3 (opcional) — Búsqueda web para investigar tu nicho
-
-1. Crea cuenta gratis en [tavily.com](https://tavily.com) (1.000 búsquedas/mes gratis).
-2. Pega la clave en **Ajustes → Búsqueda web**.
-
-Sin esto, la sección "Ideas y nicho" funciona igual pero sin datos web en vivo.
-
-## Paso 4 — Tu cerebro de marca
-
-En **🧠 Marca** rellena identidad (nombre, @handle, color, nicho), cliente
-ideal, propuesta de valor, misión, tono de voz, líneas de contenido,
-objetivos y qué evitar. Esta ficha se inyecta automáticamente en cada
-análisis, idea de contenido y propuesta de carrusel que genere la IA — cuanto
-más completa esté, mejor te va a entender. El color y el handle además salen
-impresos en los carruseles.
-
----
-
-## Cómo se usa en el día a día
-
-1. **Dashboard → Sincronizar Instagram**: trae tus últimos 100 posts con alcance, guardados, compartidos, etc. Hazlo 1 vez al día o cuando publiques.
-2. **Dashboard → Analizar con IA**: tu CM califica todo (nota 1-10 frente a tu propia media), detecta **ganadores ⭐** y escribe el diagnóstico con acciones.
-3. **Ideas y nicho → Investigar ahora**: busca temas calientes de tu nicho y propone 6 ideas.
-4. En **Publicaciones** o en **Ideas**, pulsa **Recrear 🎨 / Crear carrusel**: la IA diseña un carrusel nuevo (slides + caption + hashtags).
-5. En **Propuestas**: revisa el diseño → **Aprobar** → **Descargar ZIP** (PNGs 1080×1350 + caption.txt) → publícalo tú en Instagram.
+1. **Onboarding**: crea su primer cliente → conecta el IG del cliente →
+   rellena la ficha de marca → primer sync.
+2. **Dashboard → Sincronizar**: trae posts, historias y comentarios del
+   cliente activo (además hay un cron diario automático para todos).
+3. **Dashboard → Analizar con IA**: nota 1-10 por post frente a la media de
+   ESA cuenta, ganadores ⭐ y diagnóstico con acciones.
+4. **Ideas y nicho**: investiga el nicho del cliente (o sus comentarios
+   reales) y propone ideas por pilar de contenido.
+5. **Crear contenido**: desde una idea o un post ganador → **guion de video**
+   (elige estructura; cada sección trae el texto hablado + 🎬 notas de
+   edición: plano, B-roll, texto en pantalla, duración) o **carrusel** con la
+   identidad visual del cliente.
+6. **Propuestas → 🔗 Compartir con cliente**: genera un enlace público; el
+   cliente final lo abre sin cuenta y **aprueba** o **pide cambios**. El
+   feedback aparece en la tarjeta y se puede aplicar con un clic
+   («Regenerar aplicando su feedback»).
+7. **Aprobada → Descargar**: `.txt` del guion (con notas de edición) o `.zip`
+   del carrusel (PNGs 1080×1350 + caption) → editar/grabar → publicar a mano.
+8. **Calendario / Pipeline / Campañas**: planifica y sigue la producción de
+   cada cliente; **Métricas** e informes ejecutivos para reportarle.
 
 ## Cómo se califica cada post
 
 Engagement ponderado = (likes + comentarios + 2×guardados + 3×compartidos) / alcance.
-La nota 1-10 es tu percentil frente a tu propio histórico. Un post es **ganador**
-si su engagement supera 1,5× tu mediana con alcance por encima de la mediana.
+La nota 1-10 es el percentil frente al histórico de esa misma cuenta. Un post
+es **ganador** si su engagement supera 1,5× la mediana con alcance sobre la
+mediana.
 
-## Datos de demostración
+## Variables de entorno
 
-En **Ajustes → Datos de demostración** puedes cargar 12 posts ficticios para ver
-la plataforma funcionando antes de conectar nada, y borrarlos después.
+| Variable | Uso |
+| --- | --- |
+| `DATABASE_URL` | Transaction Pooler de Supabase (6543) |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Auth |
+| `NEXT_PUBLIC_APP_URL` | URL pública (OAuth IG + enlaces) |
+| `SESSION_SECRET` | HMAC del state OAuth |
+| `LLM_PROVIDER` / `LLM_API_KEY` (+`LLM_MODEL`/`LLM_BASE_URL`) | IA del servidor |
+| `TAVILY_API_KEY` | Búsqueda web para Ideas (opcional) |
+| `CRON_SECRET` | Bearer del cron diario |
+| `BETA_INVITE_CODE` | Código de registro de la beta (sin definir = registro abierto) |
+| `AI_DAILY_LIMIT` | Override del cupo de IA por editor (default 40) |
+| `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` | OAuth de IG (opcional; hay token manual) |
 
----
+## Migración a multi-cliente (una sola vez, producción)
 
-## Preguntas pendientes para ti
+La base desplegada antes de julio-2026 usaba tenancy por usuario. Para migrarla:
 
-1. **¿Tu cuenta de Instagram ya es profesional (Creador/Empresa)?** Es requisito de Meta para leer métricas.
-2. **¿Nicho y marca?** Rellena "Marca y nicho" en Ajustes — de eso depende la calidad de las ideas y carruseles.
-3. **¿La quieres online?** Ahora corre en tu Mac (localhost). Si la quieres accesible desde cualquier sitio con tu login, se puede desplegar (requiere mover SQLite a una BD cloud tipo Turso/Supabase — lo hago cuando me digas).
+```bash
+# 1. Backup primero (Ajustes → Descargar copia de seguridad)
+DATABASE_URL="postgres://…pooler…:6543/postgres" node scripts/migrate-clients.mjs
+```
+
+Crea 1 cliente por usuario existente, reasigna todo su contenido y elimina la
+columna `user_id` de las tablas de contenido. Idempotente. Instalaciones
+nuevas: ejecutar `scripts/schema.sql` directamente.

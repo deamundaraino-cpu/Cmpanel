@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import AuthCard from "@/components/AuthCard";
 
 const INPUT =
@@ -12,6 +11,7 @@ const INPUT =
 export default function RegistroPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [codigoBeta, setCodigoBeta] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
@@ -25,23 +25,28 @@ export default function RegistroPage() {
     }
     setLoading(true);
     setError(null);
-    const supabase = getSupabaseBrowser();
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(
-        error.message.includes("already registered")
-          ? "Ese email ya tiene una cuenta. Inicia sesión."
-          : error.message
-      );
-      return;
-    }
-    if (data.session) {
-      // Confirmación de email desactivada: sesión inmediata.
-      router.push("/onboarding");
-      router.refresh();
-    } else {
-      setCheckEmail(true);
+    try {
+      const res = await fetch("/api/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, codigoBeta }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Error al crear la cuenta");
+        return;
+      }
+      if (json.hasSession) {
+        // Confirmación de email desactivada: sesión inmediata.
+        router.push("/onboarding");
+        router.refresh();
+      } else {
+        setCheckEmail(true);
+      }
+    } catch {
+      setError("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -66,7 +71,7 @@ export default function RegistroPage() {
   return (
     <AuthCard
       title="Crea tu cuenta"
-      subtitle="Conecta tu Instagram y deja que la IA trabaje contigo"
+      subtitle="El centro de mando para editores que gestionan varios clientes"
     >
       <form onSubmit={submit} className="mt-4">
         <input
@@ -86,6 +91,17 @@ export default function RegistroPage() {
           autoComplete="new-password"
           className={INPUT}
         />
+        <input
+          type="text"
+          value={codigoBeta}
+          onChange={(e) => setCodigoBeta(e.target.value)}
+          placeholder="Código de invitación a la beta"
+          autoComplete="off"
+          className={INPUT}
+        />
+        <p className="mt-2 text-xs text-zinc-600">
+          Estamos en beta cerrada — el código te lo da quien te invitó.
+        </p>
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         <button
           disabled={loading || !email || !password}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql, ProposalRow } from "@/lib/db";
 import { renderSlide, Slide } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
@@ -11,23 +11,23 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { clientId } = auth;
   try {
     const { id } = await params;
     const sql = getSql();
     const rows = await sql<ProposalRow[]>`
-      SELECT * FROM proposals WHERE user_id = ${userId} AND id = ${Number(id)}
+      SELECT * FROM proposals WHERE client_id = ${clientId} AND id = ${Number(id)}
     `;
     const proposal = rows[0];
     if (!proposal?.slides) return fail(new Error("Propuesta no encontrada"), 404);
 
     if (proposal.formato === "guion_video") {
-      const beats = JSON.parse(proposal.slides) as { seccion: string; texto: string }[];
+      const beats = JSON.parse(proposal.slides) as { seccion: string; texto: string; edicion?: string }[];
       const hashtags = proposal.hashtags ? (JSON.parse(proposal.hashtags) as string[]) : [];
       const body =
-        beats.map((b) => `[${b.seccion.toUpperCase()}]\n${b.texto}`).join("\n\n") +
+        beats.map((b) => `[${b.seccion.toUpperCase()}]\n${b.texto}${b.edicion ? `\n🎬 ${b.edicion}` : ""}`).join("\n\n") +
         `\n\n---\nCopy para publicar:\n${proposal.caption || ""}\n\n${hashtags.join(" ")}`;
       return new NextResponse(body, {
         headers: {
@@ -38,7 +38,7 @@ export async function GET(
     }
 
     const slides = JSON.parse(proposal.slides) as Slide[];
-    const style = await buildBrandStyle(userId);
+    const style = await buildBrandStyle(clientId);
 
     const zip = new JSZip();
     for (let i = 0; i < slides.length; i++) {

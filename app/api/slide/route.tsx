@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard } from "@/lib/api";
+import { guardClient } from "@/lib/api";
 import { getSql, ProposalRow } from "@/lib/db";
 import { renderSlide, Slide } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
 
 export async function GET(req: NextRequest) {
-  const auth = await guard();
-  if (auth instanceof NextResponse) return auth;
   const pid = Number(req.nextUrl.searchParams.get("pid"));
   const index = Number(req.nextUrl.searchParams.get("i") || 0);
+  const token = req.nextUrl.searchParams.get("token");
   const sql = getSql();
-  const rows = await sql<ProposalRow[]>`
-    SELECT * FROM proposals WHERE user_id = ${auth.userId} AND id = ${pid}
-  `;
-  const proposal = rows[0];
+
+  let proposal: ProposalRow | undefined;
+  if (token) {
+    // Acceso público vía enlace de aprobación: el share_token es la credencial
+    // de ESTA propuesta concreta (página /revisar/[token], sin sesión).
+    const rows = await sql<ProposalRow[]>`
+      SELECT * FROM proposals WHERE share_token = ${token} AND id = ${pid}
+    `;
+    proposal = rows[0];
+  } else {
+    const auth = await guardClient();
+    if (auth instanceof NextResponse) return auth;
+    const rows = await sql<ProposalRow[]>`
+      SELECT * FROM proposals WHERE client_id = ${auth.clientId} AND id = ${pid}
+    `;
+    proposal = rows[0];
+  }
+
   if (!proposal?.slides) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
@@ -25,6 +38,6 @@ export async function GET(req: NextRequest) {
     slide: slides[index],
     index,
     total: slides.length,
-    style: await buildBrandStyle(auth.userId),
+    style: await buildBrandStyle(proposal.client_id),
   });
 }

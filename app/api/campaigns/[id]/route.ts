@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql } from "@/lib/db";
 
 const EDITABLE = ["nombre", "descripcion", "color", "fecha_inicio", "fecha_fin", "estado"] as const;
@@ -8,7 +8,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
@@ -22,7 +22,7 @@ export async function PATCH(
     const sql = getSql();
     await sql`
       UPDATE campaigns SET ${sql(patch, ...keys)}
-      WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+      WHERE client_id = ${auth.clientId} AND id = ${Number(id)}
     `;
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -34,20 +34,20 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const sql = getSql();
   await sql`
     UPDATE posts SET campaign_id = NULL
-    WHERE user_id = ${auth.userId} AND campaign_id = ${Number(id)}
+    WHERE client_id = ${auth.clientId} AND campaign_id = ${Number(id)}
   `;
   await sql`
     UPDATE calendar_items SET campaign_id = NULL
-    WHERE user_id = ${auth.userId} AND campaign_id = ${Number(id)}
+    WHERE client_id = ${auth.clientId} AND campaign_id = ${Number(id)}
   `;
   await sql`
-    DELETE FROM campaigns WHERE user_id = ${auth.userId} AND id = ${Number(id)}
+    DELETE FROM campaigns WHERE client_id = ${auth.clientId} AND id = ${Number(id)}
   `;
   return NextResponse.json({ ok: true });
 }

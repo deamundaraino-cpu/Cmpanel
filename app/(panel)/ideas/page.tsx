@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSql } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
 import ResearchControl from "@/components/ResearchControl";
 
@@ -40,15 +40,15 @@ export default async function IdeasPage({
     ? sp.pilar!
     : "";
 
-  const { userId } = await requireUser();
+  const { clientId } = await requireClient();
   const sql = getSql();
   const ideas = (
     filter
       ? await sql`SELECT * FROM ideas
-          WHERE user_id = ${userId} AND pilar = ${filter} ORDER BY id DESC LIMIT 40`
-      : await sql`SELECT * FROM ideas WHERE user_id = ${userId} ORDER BY id DESC LIMIT 40`
+          WHERE client_id = ${clientId} AND pilar = ${filter} ORDER BY id DESC LIMIT 40`
+      : await sql`SELECT * FROM ideas WHERE client_id = ${clientId} ORDER BY id DESC LIMIT 40`
   ) as unknown as IdeaRow[];
-  const s = await getSettings(userId, ["brand_niche"]);
+  const s = await getSettings(clientId, ["brand_niche"]);
   const niche = s.brand_niche;
   const hasTavily = !!process.env.TAVILY_API_KEY;
 

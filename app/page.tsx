@@ -6,24 +6,24 @@ export const dynamic = "force-dynamic";
 
 const FEATURES = [
   {
+    icon: "👥",
+    title: "Todos tus clientes en un panel",
+    text: "Cada cliente con su Instagram, su ficha de marca y sus métricas, separados. Cambia de cliente en un clic y nunca mezcles contenido.",
+  },
+  {
+    icon: "🎬",
+    title: "Guiones listos para editar",
+    text: "La IA convierte ideas y posts ganadores en guiones con estructura probada e indicaciones de corte, B-roll y texto en pantalla por sección.",
+  },
+  {
+    icon: "🔗",
+    title: "Aprobación del cliente sin fricción",
+    text: "Comparte un enlace y tu cliente aprueba o pide cambios desde el móvil, sin crear cuenta. El feedback te llega directo a la propuesta.",
+  },
+  {
     icon: "📊",
-    title: "Métricas que importan",
-    text: "Cada post calificado del 1 al 10 frente a tu propia media. Detecta ganadores, mejores horas y formatos que funcionan.",
-  },
-  {
-    icon: "💡",
-    title: "Ideas alineadas a tu estrategia",
-    text: "La IA investiga tu nicho y los comentarios reales de tu audiencia para proponerte ideas por pilar de contenido.",
-  },
-  {
-    icon: "🎨",
-    title: "Carruseles y guiones listos",
-    text: "Propuestas con tu identidad visual: apruébalas, pide cambios y descarga las imágenes o el guion para grabar.",
-  },
-  {
-    icon: "🤖",
-    title: "En piloto automático",
-    text: "Sincronización diaria de posts e historias, alertas operativas y renovación automática del acceso a Instagram.",
+    title: "Métricas que justifican tu trabajo",
+    text: "Cada post calificado frente a la media de esa cuenta: detecta ganadores, mejores horas y formatos, e informes ejecutivos para reportar.",
   },
 ];
 
@@ -49,25 +49,29 @@ export default async function LandingPage() {
       </header>
 
       <section className="mx-auto max-w-3xl px-6 pb-16 pt-14 text-center">
-        <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Tu community manager
+        <p className="mx-auto inline-block rounded-full border border-indigo-800/50 bg-indigo-950/30 px-3 py-1 text-xs text-indigo-300">
+          🧪 Beta cerrada — acceso con invitación
+        </p>
+        <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+          El centro de mando para
           <span className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
             {" "}
-            con IA{" "}
+            editores{" "}
           </span>
-          para Instagram
+          que gestionan varios clientes
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
-          Conecta tu cuenta, entiende qué contenido funciona y recibe ideas,
-          carruseles y guiones de video hechos a medida de tu marca. Tú
-          apruebas, él trabaja.
+          Conecta el Instagram de cada cliente, entiende qué contenido le
+          funciona y recibe ideas, guiones de video con notas de edición y
+          carruseles con su identidad. Tu cliente aprueba con un enlace, tú
+          editas y publicas.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link
             href="/registro"
             className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:bg-indigo-500"
           >
-            Crear cuenta gratis
+            Entrar con mi código de invitación
           </Link>
           <Link
             href="/login"
@@ -89,7 +93,7 @@ export default async function LandingPage() {
       </section>
 
       <footer className="border-t border-zinc-800/60 py-8 text-center text-xs text-zinc-600">
-        <p>Brandpanel — gestiona tu marca personal en Instagram con IA</p>
+        <p>Brandpanel — el panel multi-cliente para editores de contenido en Instagram</p>
         <p className="mt-2">
           <Link href="/privacidad" className="hover:text-zinc-400">
             Privacidad

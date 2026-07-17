@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { getSql, CalendarItemRow, CampaignRow } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 import PipelineBoard from "@/components/PipelineBoard";
 
 export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
-  const { userId } = await requireUser();
+  const { clientId } = await requireClient();
   const sql = getSql();
   const items = await sql<CalendarItemRow[]>`
-    SELECT * FROM calendar_items WHERE user_id = ${userId} ORDER BY fecha ASC
+    SELECT * FROM calendar_items WHERE client_id = ${clientId} ORDER BY fecha ASC
   `;
   const campaigns = await sql<CampaignRow[]>`
-    SELECT * FROM campaigns WHERE user_id = ${userId} ORDER BY created_at DESC
+    SELECT * FROM campaigns WHERE client_id = ${clientId} ORDER BY created_at DESC
   `;
 
   return (

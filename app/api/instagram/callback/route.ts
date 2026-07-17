@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard } from "@/lib/api";
 import { verifyPayload } from "@/lib/auth";
+import { getSql } from "@/lib/db";
 import { setSetting } from "@/lib/settings";
 import { getProfile } from "@/lib/instagram";
 
@@ -29,16 +30,28 @@ export async function GET(req: NextRequest) {
   if (igError) return backToSettings(req, { ig: "error", msg: igError });
   if (!code) return backToSettings(req, { ig: "error", msg: "Instagram no devolvió el código." });
 
-  // Verificar state: firmado por nosotros y del MISMO usuario de la sesión.
-  const [stateUserId, nonce, signature] = state.split(".");
+  // Verificar state: firmado por nosotros, del MISMO usuario de la sesión y
+  // con el cliente desde el que se inició el flujo.
+  const [stateUserId, stateClientId, nonce, signature] = state.split(".");
   if (
     !stateUserId ||
+    !stateClientId ||
     !nonce ||
     !signature ||
     stateUserId !== auth.userId ||
-    !verifyPayload(`${stateUserId}.${nonce}`, signature)
+    !verifyPayload(`${stateUserId}.${stateClientId}.${nonce}`, signature)
   ) {
     return backToSettings(req, { ig: "error", msg: "Estado OAuth inválido. Inténtalo de nuevo." });
+  }
+
+  // El cliente del state debe seguir siendo del usuario.
+  const clientId = Number(stateClientId);
+  const sql = getSql();
+  const owned = await sql<{ id: number }[]>`
+    SELECT id FROM clients WHERE id = ${clientId} AND owner_user_id = ${auth.userId}
+  `;
+  if (!owned.length) {
+    return backToSettings(req, { ig: "error", msg: "El cliente del flujo OAuth ya no existe." });
   }
 
   const appId = process.env.INSTAGRAM_APP_ID;
@@ -77,12 +90,12 @@ export async function GET(req: NextRequest) {
       throw new Error(longJson.error?.message || "No se pudo obtener el token de larga duración.");
     }
 
-    // 3. Guardar por usuario + perfil
-    await setSetting(auth.userId, "ig_token", longJson.access_token);
-    await setSetting(auth.userId, "ig_token_fetched_at", new Date().toISOString());
-    const profile = await getProfile(auth.userId);
-    await setSetting(auth.userId, "ig_user_id", String(profile.user_id ?? ""));
-    await setSetting(auth.userId, "ig_username", profile.username || "");
+    // 3. Guardar en los settings del CLIENTE + perfil
+    await setSetting(clientId, "ig_token", longJson.access_token);
+    await setSetting(clientId, "ig_token_fetched_at", new Date().toISOString());
+    const profile = await getProfile(clientId);
+    await setSetting(clientId, "ig_user_id", String(profile.user_id ?? ""));
+    await setSetting(clientId, "ig_username", profile.username || "");
 
     return backToSettings(req, { ig: "ok", username: profile.username || "" });
   } catch (e) {

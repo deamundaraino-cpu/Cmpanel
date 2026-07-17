@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guard, fail } from "@/lib/api";
+import { guardClient, fail } from "@/lib/api";
 import { getSql } from "@/lib/db";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getProfile, refreshToken } from "@/lib/instagram";
 import { chat } from "@/lib/llm";
 
-// Ajustes por usuario: conexión de Instagram + identidad de marca.
+// Ajustes por CLIENTE (el activo): conexión de Instagram + identidad de marca.
 // (Las llaves de IA — LLM/Tavily — son del servidor y no se exponen aquí.)
 const KEYS = [
   "ig_token",
@@ -36,9 +36,9 @@ function mask(v: string | null) {
 }
 
 export async function GET() {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
-  const raw = await getSettings(auth.userId, KEYS);
+  const raw = await getSettings(auth.clientId, KEYS);
   const out: Record<string, string> = {};
   for (const k of KEYS) {
     out[k] = SECRET_KEYS.has(k) ? mask(raw[k]) : raw[k] || "";
@@ -47,28 +47,28 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await guard();
+  const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { clientId } = auth;
   try {
     const body = await req.json();
 
     if (body.action === "test_ig") {
-      const profile = await getProfile(userId);
-      await setSetting(userId, "ig_user_id", String(profile.user_id ?? ""));
-      await setSetting(userId, "ig_username", profile.username || "");
+      const profile = await getProfile(clientId);
+      await setSetting(clientId, "ig_user_id", String(profile.user_id ?? ""));
+      await setSetting(clientId, "ig_username", profile.username || "");
       return NextResponse.json({ ok: true, profile });
     }
 
     if (body.action === "refresh_ig_token") {
-      await refreshToken(userId);
+      await refreshToken(clientId);
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "disconnect_ig") {
       const sql = getSql();
       await sql`
-        DELETE FROM settings WHERE user_id = ${userId} AND key = ANY(${IG_KEYS})
+        DELETE FROM settings WHERE client_id = ${clientId} AND key = ANY(${IG_KEYS})
       `;
       return NextResponse.json({ ok: true });
     }
@@ -94,9 +94,9 @@ export async function POST(req: NextRequest) {
       if (!KEYS.includes(k) || typeof v !== "string") continue;
       // No sobrescribir secretos con el valor enmascarado
       if (SECRET_KEYS.has(k) && (v.includes("••••") || v === "")) continue;
-      await setSetting(userId, k, v);
+      await setSetting(clientId, k, v);
       if (k === "ig_token") {
-        await setSetting(userId, "ig_token_fetched_at", new Date().toISOString());
+        await setSetting(clientId, "ig_token_fetched_at", new Date().toISOString());
       }
     }
     return NextResponse.json({ ok: true });

@@ -28,14 +28,14 @@ function median(values: number[]): number {
  * Recalcula ER, nota 1-10 (por percentil frente a tu propia media)
  * y marca ganadores (ER >= 1.5x mediana con alcance >= mediana).
  */
-export async function recomputeScores(userId: string): Promise<{ scored: number; winners: number }> {
+export async function recomputeScores(clientId: number): Promise<{ scored: number; winners: number }> {
   const sql = getSql();
-  const posts = await sql<PostRow[]>`SELECT * FROM posts WHERE user_id = ${userId}`;
+  const posts = await sql<PostRow[]>`SELECT * FROM posts WHERE client_id = ${clientId}`;
   if (!posts.length) return { scored: 0, winners: 0 };
 
   const snap = await sql<{ followers_count: number }[]>`
     SELECT followers_count FROM account_snapshots
-    WHERE user_id = ${userId} ORDER BY date DESC LIMIT 1
+    WHERE client_id = ${clientId} ORDER BY date DESC LIMIT 1
   `;
   const followers = Number(snap[0]?.followers_count || 0);
 
@@ -59,7 +59,7 @@ export async function recomputeScores(userId: string): Promise<{ scored: number;
     for (const u of updates) {
       await tx`
         UPDATE posts SET er = ${u.er}, score = ${u.score}, is_winner = ${u.is_winner}
-        WHERE user_id = ${userId} AND id = ${u.id}
+        WHERE client_id = ${clientId} AND id = ${u.id}
       `;
     }
   });
@@ -67,10 +67,10 @@ export async function recomputeScores(userId: string): Promise<{ scored: number;
   return { scored: posts.length, winners };
 }
 
-export async function statsSummary(userId: string) {
+export async function statsSummary(clientId: number) {
   const sql = getSql();
   const posts = await sql<PostRow[]>`
-    SELECT * FROM posts WHERE user_id = ${userId} ORDER BY timestamp DESC
+    SELECT * FROM posts WHERE client_id = ${clientId} ORDER BY timestamp DESC
   `;
   const totalReach = posts.reduce((a, p) => a + p.reach, 0);
   const totalInteractions = posts.reduce(

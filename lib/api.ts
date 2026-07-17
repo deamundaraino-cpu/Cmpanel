@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAuth, type Auth } from "./auth";
+import { getAuth, type Auth, type ClientAuth } from "./auth";
 
-export type { Auth };
+export type { Auth, ClientAuth };
 
 /**
  * Guard de las API routes. Devuelve la identidad del usuario o una
@@ -15,6 +15,22 @@ export async function guard(): Promise<Auth | NextResponse> {
   const auth = await getAuth();
   if (auth) return auth;
   return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+}
+
+/**
+ * Como guard(), pero además exige un cliente activo (tenancy del contenido).
+ * 409 si el editor aún no creó ningún cliente.
+ */
+export async function guardClient(): Promise<ClientAuth | NextResponse> {
+  const auth = await guard();
+  if (auth instanceof NextResponse) return auth;
+  if (auth.clientId == null) {
+    return NextResponse.json(
+      { error: "No tienes ningún cliente activo. Crea uno en la sección Clientes." },
+      { status: 409 }
+    );
+  }
+  return auth as ClientAuth;
 }
 
 /** Como guard(), pero exige rol admin. */

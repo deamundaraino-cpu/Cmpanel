@@ -1,14 +1,14 @@
 import { getSql, ProposalRow } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireClient } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProposalsPage() {
-  const { userId } = await requireUser();
+  const { clientId } = await requireClient();
   const sql = getSql();
   const proposals = await sql<ProposalRow[]>`
-    SELECT * FROM proposals WHERE user_id = ${userId} ORDER BY id DESC
+    SELECT * FROM proposals WHERE client_id = ${clientId} ORDER BY id DESC
   `;
 
   return (
@@ -37,6 +37,7 @@ export default async function ProposalsPage() {
               hashtags={p.hashtags ? JSON.parse(p.hashtags) : []}
               quality={p.quality}
               qualityNotes={p.quality_notes}
+              clientFeedback={p.client_feedback}
             />
           );
         })}

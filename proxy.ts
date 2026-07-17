@@ -41,7 +41,11 @@ export async function proxy(request: NextRequest) {
   const authed = Boolean(data?.claims?.sub);
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.has(path) || path.startsWith("/api");
+  const isPublic =
+    PUBLIC_PATHS.has(path) ||
+    path.startsWith("/api") ||
+    // Enlace público de aprobación para el cliente final (sin cuenta).
+    path.startsWith("/revisar/");
 
   if (!authed && !isPublic) {
     const url = request.nextUrl.clone();

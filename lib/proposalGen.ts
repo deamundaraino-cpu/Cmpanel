@@ -8,11 +8,14 @@ export type CarouselGen = {
 };
 
 export type ScriptGen = {
-  beats: { seccion: string; texto: string }[];
+  beats: { seccion: string; texto: string; edicion?: string }[];
   caption: string;
   hashtags: string[];
   calidad?: QualityGen;
 };
+
+/** Instrucción compartida para que cada sección del guion traiga notas de edición. */
+export const EDIT_NOTES_INSTRUCTION = `Además del texto hablado, cada sección lleva un campo "edicion" con indicaciones CONCRETAS para el editor de video: tipo de plano (a cámara, B-roll, pantalla), texto en pantalla si aplica, ritmo de corte y duración aproximada en segundos. Escríbelas como una sola línea compacta, ej: "A cámara, plano medio · texto en pantalla: EL MITO · corte rápido · ~4s".`;
 
 export const QUALITY_BAR = `Al final, autoevalúa la pieza con este listón de calidad (0-100): gancho que rompe patrón (25), tensión/creencia que rompe (25), utilidad real para el cliente ideal (25), CTA claro y accionable (15), coherencia con el tono de marca (10). Sé duro: 90+ solo si de verdad para el scroll. Inclúyelo en el JSON como "calidad": {"score": número, "razon": "1 frase honesta de qué le falta o por qué destaca"}.`;
 

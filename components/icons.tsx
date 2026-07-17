@@ -10,6 +10,7 @@ type IconName =
   | "sparkles"
   | "gem"
   | "sliders"
+  | "users"
   | "logout"
   | "sun"
   | "moon";
@@ -88,6 +89,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M7 3.5h10l4 6-9 11-9-11 4-6Z" />
       <path d="M3 9.5h18" />
       <path d="M12 20.5 8.5 9.5 12 3.5l3.5 6-3.5 11Z" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" />
+      <circle cx="17" cy="9.5" r="2.4" />
+      <path d="M16 15.4c2.3.2 4 1.7 4.5 4.1" />
     </>
   ),
   sliders: (

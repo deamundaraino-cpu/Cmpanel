@@ -17,6 +17,17 @@ export function getSql() {
       max: 5,
       prepare: false,
       idle_timeout: 20,
+      // BIGINT (ids de clients/proposals/campaigns…) como number, no string:
+      // los ids de esta app nunca se acercan a Number.MAX_SAFE_INTEGER y el
+      // código compara ids con === contra numbers (cookies, props).
+      types: {
+        bigint: {
+          to: 20,
+          from: [20],
+          serialize: (v: number | string) => String(v),
+          parse: (v: string) => Number(v),
+        },
+      },
     });
   }
   return client;
@@ -27,13 +38,23 @@ export type UserRow = {
   email: string;
   role: string;
   ai_daily_limit: number | null;
-  last_synced_at: string | null;
   onboarded: number;
   created_at: string;
 };
 
+/** Un cliente/marca gestionado por un editor (el límite de tenancy del contenido). */
+export type ClientRow = {
+  id: number;
+  owner_user_id: string;
+  created_at: string;
+  nombre: string;
+  color: string;
+  estado: string;
+  last_synced_at: string | null;
+};
+
 export type PostRow = {
-  user_id: string;
+  client_id: number;
   id: string;
   caption: string | null;
   media_type: string | null;
@@ -59,7 +80,7 @@ export type PostRow = {
 
 export type ProposalRow = {
   id: number;
-  user_id: string;
+  client_id: number;
   post_id: string | null;
   created_at: string;
   status: string;
@@ -70,13 +91,15 @@ export type ProposalRow = {
   structure_id: number | null;
   quality: number | null;
   quality_notes: string | null;
+  share_token: string | null;
+  client_feedback: string | null;
 };
 
 export type StructureBeat = { nombre: string; guia: string };
 
 export type StructureRow = {
   id: number;
-  user_id: string | null; // null = builtin global
+  user_id: string | null; // null = builtin global; librería del editor, no del cliente
   created_at: string;
   nombre: string;
   descripcion: string | null;
@@ -86,7 +109,7 @@ export type StructureRow = {
 
 export type CampaignRow = {
   id: number;
-  user_id: string;
+  client_id: number;
   created_at: string;
   nombre: string;
   descripcion: string | null;
@@ -98,7 +121,7 @@ export type CampaignRow = {
 
 export type CalendarItemRow = {
   id: number;
-  user_id: string;
+  client_id: number;
   created_at: string;
   fecha: string;
   titulo: string;
@@ -111,14 +134,14 @@ export type CalendarItemRow = {
 
 export type ReportRow = {
   id: number;
-  user_id: string;
+  client_id: number;
   created_at: string;
   period_days: number;
   content: string;
 };
 
 export type StoryRow = {
-  user_id: string;
+  client_id: number;
   id: string;
   timestamp: string | null;
   media_type: string | null;
@@ -137,7 +160,7 @@ export type StoryRow = {
 };
 
 export type CommentRow = {
-  user_id: string;
+  client_id: number;
   id: string;
   post_id: string;
   text: string | null;

@@ -6,10 +6,10 @@ export const maxDuration = 300;
 
 // Margen de 60 s bajo maxDuration para terminar limpio la iteración en curso.
 const TIME_BUDGET_MS = 240_000;
-const POSTS_PER_USER = 15;
+const POSTS_PER_CLIENT = 15;
 
 /**
- * Cron diario multi-tenant (ver vercel.json): sincroniza a todos los usuarios
+ * Cron diario multi-cliente (ver vercel.json): sincroniza todos los CLIENTES
  * con Instagram conectado, los más "olvidados" primero (staleness-first).
  * Si no caben todos en el presupuesto de tiempo, los pendientes encabezan la
  * cola de mañana (round-robin natural). Escalado futuro: disparar este mismo
@@ -23,28 +23,29 @@ export async function GET(req: NextRequest) {
 
   const deadline = Date.now() + TIME_BUDGET_MS;
   const sql = getSql();
-  const users = await sql<{ id: string }[]>`
-    SELECT u.id FROM users u
-    JOIN settings s ON s.user_id = u.id AND s.key = 'ig_token'
-    ORDER BY u.last_synced_at ASC NULLS FIRST
+  const clients = await sql<{ id: number }[]>`
+    SELECT c.id FROM clients c
+    JOIN settings s ON s.client_id = c.id AND s.key = 'ig_token'
+    WHERE c.estado = 'activo'
+    ORDER BY c.last_synced_at ASC NULLS FIRST
   `;
 
   let processed = 0;
   let skipped = 0;
-  const errors: { userId: string; error: string }[] = [];
+  const errors: { clientId: number; error: string }[] = [];
 
-  for (const u of users) {
+  for (const c of clients) {
     if (Date.now() > deadline) {
-      skipped = users.length - processed - errors.length;
+      skipped = clients.length - processed - errors.length;
       break;
     }
     try {
-      await runSync(u.id, POSTS_PER_USER);
+      await runSync(c.id, POSTS_PER_CLIENT);
       processed++;
     } catch (e) {
-      // Un tenant con token caducado no rompe el lote.
+      // Un cliente con token caducado no rompe el lote.
       errors.push({
-        userId: u.id,
+        clientId: c.id,
         error: e instanceof Error ? e.message : "Error desconocido",
       });
     }
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    total: users.length,
+    total: clients.length,
     processed,
     skipped,
     errors,

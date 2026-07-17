@@ -9,9 +9,9 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-        Conecta tu cuenta de Instagram y gestiona tus copias de seguridad. La
-        IA ya viene incluida. Para la identidad, el cliente ideal y la
-        estrategia de contenido, ve a{" "}
+        Conecta el Instagram del CLIENTE ACTIVO y gestiona tus copias de
+        seguridad. La IA ya viene incluida. Para la identidad, el cliente ideal
+        y la estrategia de contenido de este cliente, ve a{" "}
         <Link href="/marca" className="text-indigo-400 hover:text-indigo-300">
           🧠 Marca
         </Link>
@@ -25,8 +25,9 @@ export default function SettingsPage() {
       <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
         <h2 className="font-medium">💾 Copia de seguridad</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Descarga todos tus datos (posts, historias, ideas, propuestas, ficha
-          de marca, informes…) en un archivo JSON. Guárdalo de vez en cuando.
+          Descarga los datos de TODOS tus clientes (posts, historias, ideas,
+          propuestas, fichas de marca, informes…) en un archivo JSON. Guárdalo
+          de vez en cuando.
         </p>
         <div className="mt-3">
           <a
@@ -41,8 +42,9 @@ export default function SettingsPage() {
       <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
         <h2 className="font-medium">🧪 Datos de demostración</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Carga 12 posts ficticios para probar la plataforma sin conectar
-          Instagram todavía. Se pueden borrar en cualquier momento.
+          Carga 12 posts ficticios en el cliente activo para probar la
+          plataforma sin conectar Instagram todavía. Se pueden borrar en
+          cualquier momento.
         </p>
         <div className="mt-3 flex gap-2">
           <ActionButton

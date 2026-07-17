@@ -13,7 +13,8 @@ type AdminUser = {
   last_synced_at: string | null;
   ai_daily_limit: number | null;
   onboarded: number;
-  ig_username: string | null;
+  clients_count: number;
+  ig_connected: number;
   ai_today: number;
   ai_week: number;
 };
@@ -29,8 +30,12 @@ export default async function AdminPage() {
 
   const users = await sql<AdminUser[]>`
     SELECT
-      u.id, u.email, u.role, u.created_at, u.last_synced_at, u.ai_daily_limit, u.onboarded,
-      (SELECT value FROM settings s WHERE s.user_id = u.id AND s.key = 'ig_username') AS ig_username,
+      u.id, u.email, u.role, u.created_at, u.ai_daily_limit, u.onboarded,
+      (SELECT COUNT(*)::int FROM clients c WHERE c.owner_user_id = u.id) AS clients_count,
+      (SELECT COUNT(*)::int FROM clients c
+        JOIN settings s ON s.client_id = c.id AND s.key = 'ig_token'
+        WHERE c.owner_user_id = u.id) AS ig_connected,
+      (SELECT MAX(c.last_synced_at) FROM clients c WHERE c.owner_user_id = u.id) AS last_synced_at,
       COALESCE((SELECT SUM(a.count)::int FROM ai_usage a
         WHERE a.user_id = u.id AND a.date = ${today}), 0) AS ai_today,
       COALESCE((SELECT SUM(a.count)::int FROM ai_usage a
@@ -39,7 +44,7 @@ export default async function AdminPage() {
     ORDER BY u.created_at DESC
   `;
 
-  const connected = users.filter((u) => u.ig_username).length;
+  const connected = users.filter((u) => u.ig_connected > 0).length;
   const aiTodayTotal = users.reduce((a, u) => a + u.ai_today, 0);
 
   return (
@@ -57,7 +62,7 @@ export default async function AdminPage() {
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900 text-left text-xs text-zinc-500">
               <th className="px-3 py-2.5 font-medium">Usuario</th>
-              <th className="px-3 py-2.5 font-medium">Instagram</th>
+              <th className="px-3 py-2.5 font-medium">Clientes</th>
               <th className="px-3 py-2.5 font-medium">Registro</th>
               <th className="px-3 py-2.5 font-medium">Último sync</th>
               <th className="px-3 py-2.5 text-right font-medium">IA hoy</th>
@@ -82,7 +87,14 @@ export default async function AdminPage() {
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-zinc-300">
-                  {u.ig_username ? `@${u.ig_username}` : <span className="text-zinc-600">—</span>}
+                  {u.clients_count > 0 ? (
+                    <>
+                      {u.clients_count}
+                      <span className="text-zinc-500"> · {u.ig_connected} con IG</span>
+                    </>
+                  ) : (
+                    <span className="text-zinc-600">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400">{df(u.created_at)}</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400">{df(u.last_synced_at)}</td>

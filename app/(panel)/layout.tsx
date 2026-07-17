@@ -1,7 +1,9 @@
 import { requireUser } from "@/lib/auth";
+import { getSql } from "@/lib/db";
 import NavLink from "@/components/NavLink";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
+import ClientSwitcher from "@/components/ClientSwitcher";
 
 function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -20,6 +22,12 @@ export default async function PanelLayout({
   children: React.ReactNode;
 }) {
   const auth = await requireUser();
+  const sql = getSql();
+  const clients = await sql<{ id: number; nombre: string; color: string }[]>`
+    SELECT id, nombre, color FROM clients
+    WHERE owner_user_id = ${auth.userId} AND estado = 'activo'
+    ORDER BY created_at ASC, id ASC
+  `;
 
   return (
     <div className="flex min-h-screen">
@@ -28,9 +36,9 @@ export default async function PanelLayout({
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-sm font-bold text-white shadow-lg shadow-indigo-500/25">
             B
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold tracking-tight">Brandpanel</p>
-            <p className="text-[11px] text-zinc-500">Tu CM con IA</p>
+            <ClientSwitcher clients={clients} activeId={auth.clientId} />
           </div>
         </div>
 
@@ -51,11 +59,12 @@ export default async function PanelLayout({
             <NavLink href="/estructuras" icon="film">Estructuras</NavLink>
             <NavLink href="/marca" icon="gem">Marca</NavLink>
           </NavGroup>
-          {auth.role === "admin" && (
-            <NavGroup label="Gestión">
+          <NavGroup label="Gestión">
+            <NavLink href="/clientes" icon="users">Clientes</NavLink>
+            {auth.role === "admin" && (
               <NavLink href="/admin" icon="sliders">Admin</NavLink>
-            </NavGroup>
-          )}
+            )}
+          </NavGroup>
         </nav>
 
         <div className="mt-4 grid gap-0.5 border-t border-zinc-800/80 pt-3">

@@ -22,21 +22,21 @@ export type SyncResult = {
 };
 
 /**
- * Sincronización completa con Instagram para UN usuario: perfil, posts,
+ * Sincronización completa con Instagram para UN cliente: perfil, posts,
  * historias y comentarios.
  * `maxPosts`: 100 para el sync manual; menos en el cron diario multi-tenant.
  */
-export async function runSync(userId: string, maxPosts = 100): Promise<SyncResult> {
+export async function runSync(clientId: number, maxPosts = 100): Promise<SyncResult> {
   const sql = getSql();
 
   // Auto-renovación del token si tiene más de 45 días (caduca a los 60).
   let tokenRefreshed = false;
-  const fetchedAt = await getSetting(userId, "ig_token_fetched_at");
+  const fetchedAt = await getSetting(clientId, "ig_token_fetched_at");
   if (fetchedAt) {
     const ageDays = (Date.now() - new Date(fetchedAt).getTime()) / 86400_000;
     if (ageDays > 45) {
       try {
-        await refreshToken(userId);
+        await refreshToken(clientId);
         tokenRefreshed = true;
       } catch {
         // Si falla, el sync sigue con el token actual; la alerta avisará.
@@ -44,33 +44,33 @@ export async function runSync(userId: string, maxPosts = 100): Promise<SyncResul
     }
   }
 
-  const profile = await getProfile(userId);
-  await setSetting(userId, "ig_username", profile.username || "");
+  const profile = await getProfile(clientId);
+  await setSetting(clientId, "ig_username", profile.username || "");
 
   const today = new Date().toISOString().slice(0, 10);
   await sql`
-    INSERT INTO account_snapshots (user_id, date, followers_count, media_count)
-    VALUES (${userId}, ${today}, ${profile.followers_count || 0}, ${profile.media_count || 0})
-    ON CONFLICT (user_id, date) DO UPDATE SET
+    INSERT INTO account_snapshots (client_id, date, followers_count, media_count)
+    VALUES (${clientId}, ${today}, ${profile.followers_count || 0}, ${profile.media_count || 0})
+    ON CONFLICT (client_id, date) DO UPDATE SET
       followers_count = EXCLUDED.followers_count,
       media_count = EXCLUDED.media_count
   `;
 
   // Posts + insights
-  const media = await getMedia(userId, maxPosts);
+  const media = await getMedia(clientId, maxPosts);
   let synced = 0;
   for (const m of media) {
-    const insights = await getMediaInsights(userId, m.id);
+    const insights = await getMediaInsights(clientId, m.id);
     await sql`
-      INSERT INTO posts (user_id, id, caption, media_type, media_product_type, media_url,
+      INSERT INTO posts (client_id, id, caption, media_type, media_product_type, media_url,
         thumbnail_url, permalink, timestamp, like_count, comments_count, reach, saved, shares,
         views, total_interactions, is_demo, last_synced)
-      VALUES (${userId}, ${m.id}, ${m.caption || null}, ${m.media_type || null}, ${m.media_product_type || null},
+      VALUES (${clientId}, ${m.id}, ${m.caption || null}, ${m.media_type || null}, ${m.media_product_type || null},
         ${m.media_url || null}, ${m.thumbnail_url || null}, ${m.permalink || null}, ${m.timestamp || null},
         ${m.like_count || 0}, ${m.comments_count || 0}, ${insights.reach || 0}, ${insights.saved || 0},
         ${insights.shares || 0}, ${insights.views || 0}, ${insights.total_interactions || 0}, 0,
         ${new Date().toISOString()})
-      ON CONFLICT (user_id, id) DO UPDATE SET
+      ON CONFLICT (client_id, id) DO UPDATE SET
         caption = EXCLUDED.caption,
         like_count = EXCLUDED.like_count,
         comments_count = EXCLUDED.comments_count,
@@ -89,18 +89,18 @@ export async function runSync(userId: string, maxPosts = 100): Promise<SyncResul
   // Historias activas: la API solo las expone 24 h; aquí se persisten para siempre.
   let syncedStories = 0;
   try {
-    const stories = await getStories(userId);
+    const stories = await getStories(clientId);
     for (const s of stories) {
-      const insights = await getStoryInsights(userId, s.id);
+      const insights = await getStoryInsights(clientId, s.id);
       await sql`
-        INSERT INTO stories (user_id, id, timestamp, media_type, media_url, thumbnail_url, caption,
+        INSERT INTO stories (client_id, id, timestamp, media_type, media_url, thumbnail_url, caption,
           views, reach, replies, shares, total_interactions, exits, taps_forward, taps_back, last_synced)
-        VALUES (${userId}, ${s.id}, ${s.timestamp || null}, ${s.media_type || null}, ${s.media_url || null},
+        VALUES (${clientId}, ${s.id}, ${s.timestamp || null}, ${s.media_type || null}, ${s.media_url || null},
           ${s.thumbnail_url || null}, ${s.caption || null}, ${insights.views || 0}, ${insights.reach || 0},
           ${insights.replies || 0}, ${insights.shares || 0}, ${insights.total_interactions || 0},
           ${insights.exits || 0}, ${insights.taps_forward || 0}, ${insights.taps_back || 0},
           ${new Date().toISOString()})
-        ON CONFLICT (user_id, id) DO UPDATE SET
+        ON CONFLICT (client_id, id) DO UPDATE SET
           views = EXCLUDED.views,
           reach = EXCLUDED.reach,
           replies = EXCLUDED.replies,
@@ -121,19 +121,19 @@ export async function runSync(userId: string, maxPosts = 100): Promise<SyncResul
   let syncedComments = 0;
   try {
     const topPosts = await sql<PostRow[]>`
-      SELECT id FROM posts WHERE user_id = ${userId} AND is_demo = 0
+      SELECT id FROM posts WHERE client_id = ${clientId} AND is_demo = 0
       ORDER BY (like_count + comments_count + saved + shares) DESC
       LIMIT 10
     `;
     for (const p of topPosts) {
-      const comments = await getComments(userId, p.id);
+      const comments = await getComments(clientId, p.id);
       for (const c of comments) {
         if (!c.text?.trim()) continue;
         await sql`
-          INSERT INTO comments (user_id, id, post_id, text, like_count, timestamp, last_synced)
-          VALUES (${userId}, ${c.id}, ${p.id}, ${c.text}, ${c.like_count || 0}, ${c.timestamp || null},
+          INSERT INTO comments (client_id, id, post_id, text, like_count, timestamp, last_synced)
+          VALUES (${clientId}, ${c.id}, ${p.id}, ${c.text}, ${c.like_count || 0}, ${c.timestamp || null},
             ${new Date().toISOString()})
-          ON CONFLICT (user_id, id) DO UPDATE SET
+          ON CONFLICT (client_id, id) DO UPDATE SET
             text = EXCLUDED.text,
             like_count = EXCLUDED.like_count,
             last_synced = EXCLUDED.last_synced
@@ -145,11 +145,11 @@ export async function runSync(userId: string, maxPosts = 100): Promise<SyncResul
     // Comentarios tampoco bloquean el sync.
   }
 
-  const { scored, winners } = await recomputeScores(userId);
+  const { scored, winners } = await recomputeScores(clientId);
 
   // Marca de último sync (alimenta el orden staleness-first del cron).
   await sql`
-    UPDATE users SET last_synced_at = ${new Date().toISOString()} WHERE id = ${userId}
+    UPDATE clients SET last_synced_at = ${new Date().toISOString()} WHERE id = ${clientId}
   `;
 
   return {
