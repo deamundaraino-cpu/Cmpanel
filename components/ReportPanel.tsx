@@ -21,7 +21,29 @@ export default function ReportPanel({
   const [reports, setReports] = useState(initialReports);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sharedId, setSharedId] = useState<number | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const router = useRouter();
+
+  async function share(id: number) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/report/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "share" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.path) {
+        const url = `${window.location.origin}${json.path}`;
+        setShareUrl(url);
+        setSharedId(id);
+        await navigator.clipboard.writeText(url).catch(() => {});
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function generate() {
     setBusy(true);
@@ -78,9 +100,24 @@ export default function ReportPanel({
           const c: ReportContent = JSON.parse(r.content);
           return (
             <div key={r.id} className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-              <p className="text-xs text-zinc-500">
-                {new Date(r.created_at).toLocaleString("es-ES")} · últimos {r.period_days} días
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-zinc-500">
+                  {new Date(r.created_at).toLocaleString("es-ES")} · últimos {r.period_days} días
+                </p>
+                <button
+                  onClick={() => share(r.id)}
+                  disabled={busy}
+                  className="rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+                  title="Genera un enlace público para enviarle el informe a tu cliente"
+                >
+                  {sharedId === r.id ? "Enlace copiado ✓" : "🔗 Compartir con tu cliente"}
+                </button>
+              </div>
+              {sharedId === r.id && shareUrl && (
+                <p className="mt-2 break-all rounded-md border border-indigo-900/50 bg-indigo-950/20 px-2.5 py-1.5 text-xs text-indigo-300">
+                  {shareUrl}
+                </p>
+              )}
               <p className="mt-1.5 text-sm text-zinc-200">{c.resumen}</p>
               <div className="mt-3 grid gap-3 md:grid-cols-3">
                 <div>

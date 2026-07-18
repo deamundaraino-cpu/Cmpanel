@@ -138,6 +138,7 @@ export type ReportRow = {
   created_at: string;
   period_days: number;
   content: string;
+  share_token: string | null;
 };
 
 export type StoryRow = {

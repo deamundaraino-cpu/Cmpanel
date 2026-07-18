@@ -1,7 +1,8 @@
 # Brandpanel — Guía (beta cerrada)
 
-El centro de mando para **editores de video y gestores de contenido que
-trabajan con varios clientes en Instagram**: mide las publicaciones de cada
+El centro de mando para **gestores de contenido que trabajan con varios
+clientes en Instagram** (con guiones y notas de edición listos para
+entregarle a su editor de video): mide las publicaciones de cada
 cliente, las califica, propone ideas y genera guiones de video (con notas de
 edición) y carruseles que el cliente final aprueba con un enlace, sin cuenta.
 

@@ -131,7 +131,10 @@ CREATE TABLE IF NOT EXISTS ideas (
   formato TEXT,
   razon TEXT,
   fuentes TEXT,
-  pilar TEXT
+  pilar TEXT,
+  -- JSON {tipo: ganador|comentarios|tendencia|formato, detalle} — el dato real
+  -- de la cuenta en el que se basa la idea (los "recibos" de la IA).
+  evidencia TEXT
 );
 
 CREATE TABLE IF NOT EXISTS proposals (
@@ -194,7 +197,8 @@ CREATE TABLE IF NOT EXISTS reports (
   client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL,
   period_days INTEGER NOT NULL,
-  content TEXT NOT NULL
+  content TEXT NOT NULL,
+  share_token TEXT UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS stories (

@@ -16,6 +16,7 @@ type IdeaRow = {
   formato: string | null;
   razon: string | null;
   pilar: string | null;
+  evidencia: string | null;
 };
 
 const PILAR_META: Record<string, { label: string; badge: string }> = {
@@ -23,6 +24,24 @@ const PILAR_META: Record<string, { label: string; badge: string }> = {
   adoctrinamiento: { label: "🧲 Adoctrinamiento", badge: "bg-violet-600/20 text-violet-300" },
   conversion: { label: "🎯 Conversión", badge: "bg-amber-600/20 text-amber-300" },
 };
+
+// Los "recibos" de la IA: en qué dato real se basa cada idea.
+const EVIDENCIA_META: Record<string, { label: string; badge: string }> = {
+  ganador: { label: "⭐ Basada en tu ganador", badge: "bg-emerald-600/20 text-emerald-300" },
+  comentarios: { label: "💬 De comentarios reales", badge: "bg-rose-600/20 text-rose-300" },
+  formato: { label: "📊 Tu mejor formato", badge: "bg-indigo-600/20 text-indigo-300" },
+  tendencia: { label: "🔍 Tendencia del nicho", badge: "bg-zinc-700/60 text-zinc-300" },
+};
+
+function parseEvidencia(raw: string | null): { tipo: string; detalle: string } | null {
+  if (!raw) return null;
+  try {
+    const e = JSON.parse(raw);
+    return e?.tipo && EVIDENCIA_META[e.tipo] ? e : null;
+  } catch {
+    return null;
+  }
+}
 
 const FILTERS = [
   { value: "", label: "Todas" },
@@ -85,6 +104,8 @@ export default async function IdeasPage({
       <div className="mt-4 grid gap-3">
         {ideas.map((idea) => {
           const meta = idea.pilar ? PILAR_META[idea.pilar] : null;
+          const ev = parseEvidencia(idea.evidencia);
+          const evMeta = ev ? EVIDENCIA_META[ev.tipo] : null;
           return (
             <div key={idea.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
               <div className="flex items-start justify-between gap-4">
@@ -98,11 +119,22 @@ export default async function IdeasPage({
                     <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
                       {idea.formato}
                     </span>
+                    {evMeta && (
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium ${evMeta.badge}`}
+                        title={ev!.detalle}
+                      >
+                        {evMeta.label}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 font-medium">{idea.tema}</p>
                   {idea.angulo && <p className="mt-1 text-sm text-zinc-400">{idea.angulo}</p>}
                 </div>
               </div>
+              {ev?.detalle && (
+                <p className="mt-2 text-xs text-zinc-500">📎 {ev.detalle}</p>
+              )}
               {idea.razon && <p className="mt-2 text-xs text-zinc-500">💡 {idea.razon}</p>}
               <div className="mt-3">
                 <CreateProposalControl

@@ -71,7 +71,7 @@ export default function RegistroPage() {
   return (
     <AuthCard
       title="Crea tu cuenta"
-      subtitle="El centro de mando para editores que gestionan varios clientes"
+      subtitle="El centro de mando para gestores de contenido con varios clientes"
     >
       <form onSubmit={submit} className="mt-4">
         <input

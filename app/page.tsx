@@ -12,8 +12,8 @@ const FEATURES = [
   },
   {
     icon: "🎬",
-    title: "Guiones listos para editar",
-    text: "La IA convierte ideas y posts ganadores en guiones con estructura probada e indicaciones de corte, B-roll y texto en pantalla por sección.",
+    title: "Del dato al guion listo para grabar",
+    text: "La IA convierte los ganadores y las ideas de cada cuenta en guiones con estructura probada y notas de edición para entregarle a tu editor.",
   },
   {
     icon: "🔗",
@@ -22,8 +22,29 @@ const FEATURES = [
   },
   {
     icon: "📊",
-    title: "Métricas que justifican tu trabajo",
-    text: "Cada post calificado frente a la media de esa cuenta: detecta ganadores, mejores horas y formatos, e informes ejecutivos para reportar.",
+    title: "Informes que retienen clientes",
+    text: "Cada post calificado frente a la media de esa cuenta, e informes ejecutivos con IA que le envías a tu cliente con un enlace.",
+  },
+];
+
+const VS_CHATGPT = [
+  {
+    title: "Conoce las métricas reales de cada cuenta",
+    chat: "Escribe sobre lo que le pidas, sin saber qué funcionó",
+    brand:
+      "Cada idea y guion se ancla a los ganadores, el mejor formato y el mejor día de ESA cuenta — y te muestra la evidencia",
+  },
+  {
+    title: "Tu cliente participa sin apps ni cuentas",
+    chat: "Copias y pegas a WhatsApp, el feedback se pierde en audios",
+    brand:
+      "Enlace de aprobación y de informe: tu cliente aprueba, pide cambios o lee resultados desde el móvil",
+  },
+  {
+    title: "Cada cliente, su mundo",
+    chat: "Un solo hilo donde se mezclan todos tus clientes",
+    brand:
+      "Ficha de marca, historial, calendario y pipeline separados por cliente, más tu librería de estructuras reutilizable",
   },
 ];
 
@@ -56,15 +77,14 @@ export default async function LandingPage() {
           El centro de mando para
           <span className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
             {" "}
-            editores{" "}
+            gestores de contenido{" "}
           </span>
-          que gestionan varios clientes
+          que llevan varios clientes
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
           Conecta el Instagram de cada cliente, entiende qué contenido le
-          funciona y recibe ideas, guiones de video con notas de edición y
-          carruseles con su identidad. Tu cliente aprueba con un enlace, tú
-          editas y publicas.
+          funciona y convierte esos datos en ideas, guiones y carruseles con su
+          identidad. Tu cliente aprueba con un enlace; tú entregas y reportas.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link
@@ -82,7 +102,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-5xl gap-4 px-6 pb-20 sm:grid-cols-2">
+      <section className="mx-auto grid max-w-5xl gap-4 px-6 pb-16 sm:grid-cols-2">
         {FEATURES.map((f) => (
           <div key={f.title} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-2xl">{f.icon}</p>
@@ -92,8 +112,39 @@ export default async function LandingPage() {
         ))}
       </section>
 
+      <section className="mx-auto max-w-5xl px-6 pb-20">
+        <h2 className="text-center text-2xl font-semibold tracking-tight">
+          ¿Por qué no simplemente ChatGPT?
+        </h2>
+        <p className="mx-auto mt-2 max-w-xl text-center text-sm text-zinc-400">
+          Un chat escribe bonito. Un gestor necesita que el contenido salga de
+          los datos de cada cuenta y vuelva aprobado por el cliente.
+        </p>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {VS_CHATGPT.map((row) => (
+            <div key={row.title} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <p className="font-medium">{row.title}</p>
+              <div className="mt-4 grid gap-3 text-sm leading-relaxed">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Con un chat genérico
+                  </p>
+                  <p className="mt-1 text-zinc-500">{row.chat}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-300">
+                    Con Brandpanel
+                  </p>
+                  <p className="mt-1 text-zinc-300">{row.brand}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <footer className="border-t border-zinc-800/60 py-8 text-center text-xs text-zinc-600">
-        <p>Brandpanel — el panel multi-cliente para editores de contenido en Instagram</p>
+        <p>Brandpanel — el panel multi-cliente para gestores de contenido en Instagram</p>
         <p className="mt-2">
           <Link href="/privacidad" className="hover:text-zinc-400">
             Privacidad

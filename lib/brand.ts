@@ -39,6 +39,17 @@ export async function hasBrandBrief(clientId: number): Promise<boolean> {
   return Object.values(s).some((v) => !!v);
 }
 
+/** Completitud de la ficha de marca (para la card "lo que tu IA sabe"). */
+export async function briefCompleteness(
+  clientId: number
+): Promise<{ filled: number; total: number }> {
+  const s = await getSettings(clientId, [...BRIEF_KEYS]);
+  return {
+    filled: Object.values(s).filter((v) => !!v).length,
+    total: BRIEF_KEYS.length,
+  };
+}
+
 const VALID_STYLES: VisualStyle[] = ["minimal_oscuro", "editorial_claro", "bold_contraste"];
 
 /** Identidad visual lista para pasar a renderSlide(): color, estilo y logo. */

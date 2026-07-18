@@ -2,9 +2,12 @@ import Link from "next/link";
 import { getSql, PostRow } from "@/lib/db";
 import { statsSummary } from "@/lib/scoring";
 import { getSetting } from "@/lib/settings";
+import { briefCompleteness } from "@/lib/brand";
+import { formatBreakdown, dayOfWeekBreakdown } from "@/lib/metrics";
 import { requireClient } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
+import BrainCard from "@/components/BrainCard";
 import Sparkline from "@/components/Sparkline";
 import PageHeader from "@/components/PageHeader";
 
@@ -23,11 +26,26 @@ type Analysis = {
 };
 
 export default async function Dashboard() {
-  const { clientId, onboarded } = await requireClient();
+  const { clientId, clientNombre, onboarded } = await requireClient();
   if (!onboarded) redirect("/onboarding");
   const sql = getSql();
   const { posts, totalReach, avgEr } = await statsSummary(clientId);
   const winners = posts.filter((p) => p.is_winner);
+
+  // Contexto que la IA usa para este cliente (los "recibos" de la BrainCard).
+  const [commentsRow] = await sql<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM comments WHERE client_id = ${clientId}
+  `;
+  const brief = await briefCompleteness(clientId);
+  const formats = formatBreakdown(posts).sort((a, b) => b.value - a.value);
+  const bestFormat =
+    formats[0] && avgEr > 0
+      ? { label: formats[0].label, mult: formats[0].value / avgEr }
+      : null;
+  const bestDay =
+    dayOfWeekBreakdown(posts)
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)[0]?.label || null;
   const snapshots = await sql<{ date: string; followers_count: number }[]>`
     SELECT * FROM account_snapshots WHERE client_id = ${clientId} ORDER BY date ASC
   `;
@@ -68,6 +86,18 @@ export default async function Dashboard() {
           </>
         }
       />
+
+      <div className="mt-6">
+        <BrainCard
+          clientNombre={clientNombre}
+          postsCount={posts.length}
+          winnersCount={winners.length}
+          commentsCount={commentsRow.n}
+          bestFormat={bestFormat}
+          bestDay={bestDay}
+          brief={brief}
+        />
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {tiles.map((t) => (
