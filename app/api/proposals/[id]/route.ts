@@ -98,7 +98,7 @@ export async function PATCH(
       }
 
       const gen = await chatJson<CarouselGen>(
-        `Eres un creador de carruseles virales de Instagram. Revisas carruseles aplicando el feedback del creador SIN perder lo que ya funciona. Cada slide: titulo (máx 60 caracteres) y cuerpo (máx 220). Primer slide = portada-gancho; último = CTA. Español, tono de la marca.\n\nFicha de marca:\n${brief}`,
+        `Eres un creador de carruseles virales de Instagram. Revisas carruseles aplicando el feedback del creador SIN perder lo que ya funciona. Cada slide: titulo (máx 60 caracteres) y cuerpo (máx 220). Primer slide = portada-gancho; último = CTA. Español, tono de la marca. En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}`,
         `Carrusel actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}}\nEntre 6 y 7 slides, 15-20 hashtags.\n${QUALITY_BAR}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió el carrusel revisado"), 500);

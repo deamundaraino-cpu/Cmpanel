@@ -38,6 +38,11 @@ const VISUAL_STYLES = [
     label: "Bold contraste",
     hint: "Fondo a todo color, texto grande en blanco. Máximo impacto para hooks.",
   },
+  {
+    value: "bold_impacto",
+    label: "Bold impacto",
+    hint: "Fondo negro, tu color como acento en la frase clave. Portadas con variaciones de diseño automáticas.",
+  },
 ];
 
 function Field({
@@ -244,7 +249,7 @@ export default function BrandForm() {
 
         <div className="mt-5">
           <span className="text-xs font-medium text-zinc-400">Estilo de diseño</span>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {VISUAL_STYLES.map((style) => {
               const active = (s.brand_visual_style || "minimal_oscuro") === style.value;
               return (

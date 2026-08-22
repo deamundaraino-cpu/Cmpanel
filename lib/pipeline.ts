@@ -1,4 +1,5 @@
 import { getSql, ProposalRow } from "./db";
+import { stripEmphasis } from "./slide";
 
 /**
  * Al aprobar una propuesta (desde el panel o desde el enlace del cliente),
@@ -23,7 +24,7 @@ export async function ensurePipelineItem(proposal: ProposalRow): Promise<void> {
     if (proposal.formato === "guion_video") {
       titulo = (parsed[0]?.texto || proposal.caption || titulo).slice(0, 90);
     } else {
-      titulo = (parsed[0]?.titulo || proposal.caption || titulo).slice(0, 90);
+      titulo = stripEmphasis(parsed[0]?.titulo || proposal.caption || titulo).slice(0, 90);
     }
   } catch {
     // slides ilegibles: se queda el título genérico

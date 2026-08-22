@@ -50,7 +50,7 @@ export async function briefCompleteness(
   };
 }
 
-const VALID_STYLES: VisualStyle[] = ["minimal_oscuro", "editorial_claro", "bold_contraste"];
+const VALID_STYLES: VisualStyle[] = ["minimal_oscuro", "editorial_claro", "bold_contraste", "bold_impacto"];
 
 /** Identidad visual lista para pasar a renderSlide(): color, estilo y logo. */
 export async function buildBrandStyle(clientId: number): Promise<BrandStyle> {

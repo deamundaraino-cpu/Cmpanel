@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export type Slide = { titulo: string; cuerpo: string };
 
-export type VisualStyle = "minimal_oscuro" | "editorial_claro" | "bold_contraste";
+export type VisualStyle = "minimal_oscuro" | "editorial_claro" | "bold_contraste" | "bold_impacto";
 
 export type BrandStyle = {
   brandName: string;
@@ -29,7 +29,42 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
     label: "Bold contraste",
     hint: "Fondo a todo color con tu marca, texto grande en blanco. Máximo impacto, ideal para hooks.",
   },
+  {
+    value: "bold_impacto",
+    label: "Bold impacto",
+    hint: "Fondo negro, tu color como acento en la frase clave, jerarquía tipográfica marcada. Portadas con variaciones de diseño automáticas.",
+  },
 ];
+
+/** Marca la frase clave de un título envolviéndola en **dobles asteriscos**. */
+export function parseEmphasis(text: string): { text: string; strong: boolean }[] {
+  return text
+    .split(/\*\*(.+?)\*\*/g)
+    .filter((part) => part.length > 0)
+    .map((part, i) => ({ text: part, strong: i % 2 === 1 }));
+}
+
+/** Quita las marcas de énfasis para mostrar el título como texto plano (calendario, pipeline). */
+export function stripEmphasis(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, "$1");
+}
+
+function hashString(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/** Blanco o negro según cuál contraste mejor sobre el color dado. */
+function contrastText(hex: string): string {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return "#000000";
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#0a0a0a" : "#ffffff";
+}
 
 function BrandMark({ style, size = 18 }: { style: BrandStyle; size?: number }) {
   if (style.logo) {
@@ -295,6 +330,221 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
   );
 }
 
+type Word = { text: string; strong: boolean };
+
+function toWords(segments: { text: string; strong: boolean }[]): Word[] {
+  const words: Word[] = [];
+  for (const seg of segments) {
+    for (const w of seg.text.split(/\s+/).filter(Boolean)) {
+      words.push({ text: w, strong: seg.strong });
+    }
+  }
+  return words;
+}
+
+type CoverVariant = "banda" | "insignia" | "subrayado" | "cita";
+
+/** Elige un tratamiento de portada distinto según el contenido, para que los carruseles no se vean repetitivos. */
+function pickCoverVariant(titulo: string): CoverVariant {
+  const variants: CoverVariant[] = ["banda", "insignia", "subrayado", "cita"];
+  const variant = variants[hashString(titulo) % variants.length];
+  const tieneNumeroInicial = /^\*{0,2}\d+/.test(titulo.trim());
+  return variant === "insignia" && !tieneNumeroInicial ? "banda" : variant;
+}
+
+function renderTitleBanda(words: Word[], accent: string, size: number) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", rowGap: 14, columnGap: 12 }}>
+      {words.map((w, i) => (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            fontSize: size,
+            fontWeight: 900,
+            lineHeight: 1.05,
+            color: w.strong ? contrastText(accent) : "#ffffff",
+            background: w.strong ? accent : "transparent",
+            padding: w.strong ? "4px 16px" : "4px 0",
+            borderRadius: w.strong ? 10 : 0,
+          }}
+        >
+          {w.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderTitleInsignia(titulo: string, accent: string, size: number) {
+  const match = titulo.match(/^(\*{0,2})(\d+)\1\s*/) || titulo.match(/^(\d+)\s*/);
+  const numero = match ? match[match.length - 1] : "";
+  const resto = titulo.slice(match ? match[0].length : 0);
+  const words = toWords(parseEmphasis(resto));
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
+      <div
+        style={{
+          display: "flex",
+          width: 150,
+          height: 150,
+          minWidth: 150,
+          borderRadius: 75,
+          background: accent,
+          color: contrastText(accent),
+          fontSize: 74,
+          fontWeight: 900,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {numero}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          minWidth: 0,
+          flexWrap: "wrap",
+          gap: 10,
+          fontSize: size,
+          fontWeight: 900,
+          lineHeight: 1.08,
+        }}
+      >
+        {words.map((w, i) => (
+          <div key={i} style={{ display: "flex", color: w.strong ? accent : "#ffffff" }}>
+            {w.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function renderTitleSubrayado(words: Word[], accent: string, size: number) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", rowGap: 18, columnGap: 14 }}>
+      {words.map((w, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", fontSize: size, fontWeight: 900, lineHeight: 1.05, color: "#ffffff" }}>
+            {w.text}
+          </div>
+          {w.strong && (
+            <div
+              style={{
+                display: "flex",
+                width: Math.round(w.text.length * size * 0.62),
+                height: 10,
+                background: accent,
+                borderRadius: 6,
+                marginTop: 6,
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderTitleCita(words: Word[], accent: string, size: number) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", fontSize: 160, fontWeight: 900, lineHeight: 0.5, color: accent }}>
+        {"“"}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: size, fontWeight: 900, lineHeight: 1.08 }}>
+        {words.map((w, i) => (
+          <div key={i} style={{ display: "flex", color: w.strong ? accent : "#ffffff" }}>
+            {w.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function renderCoverTitle(titulo: string, variant: CoverVariant, accent: string, size: number) {
+  const upper = titulo.toUpperCase();
+  const words = toWords(parseEmphasis(upper));
+  if (variant === "insignia") return renderTitleInsignia(upper, accent, size);
+  if (variant === "subrayado") return renderTitleSubrayado(words, accent, size);
+  if (variant === "cita") return renderTitleCita(words, accent, size);
+  return renderTitleBanda(words, accent, size);
+}
+
+function renderBoldImpacto(slide: Slide, index: number, total: number, style: BrandStyle) {
+  const isCover = index === 0;
+  const isLast = index === total - 1;
+  const accent = style.primary;
+  const variant = isCover ? pickCoverVariant(slide.titulo) : "banda";
+  const titleSize = isCover ? 76 : 54;
+  const words = toWords(parseEmphasis(slide.titulo.toUpperCase()));
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: 72,
+        background: "#0a0a0a",
+        color: "#ffffff",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 26, fontWeight: 800, color: "#ffffff" }}>
+          <BrandMark style={style} />
+          {style.brandName}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 24,
+            fontWeight: 800,
+            color: contrastText(accent),
+            background: accent,
+            borderRadius: 999,
+            padding: "6px 16px",
+          }}
+        >
+          {index + 1}/{total}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+        {isCover
+          ? renderCoverTitle(slide.titulo, variant, accent, titleSize)
+          : renderTitleBanda(words, accent, titleSize)}
+        {slide.cuerpo ? (
+          <div style={{ display: "flex", fontSize: 36, lineHeight: 1.45, color: "rgba(255,255,255,0.75)" }}>
+            {slide.cuerpo}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderTop: "3px solid rgba(255,255,255,0.15)",
+          paddingTop: 32,
+        }}
+      >
+        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: accent }}>{style.brandHandle}</div>
+        <div style={{ display: "flex", fontSize: 26, color: "rgba(255,255,255,0.6)" }}>
+          {isLast ? "Guarda este post »" : "Desliza »"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function renderSlide(opts: {
   slide: Slide;
   index: number;
@@ -307,7 +557,9 @@ export function renderSlide(opts: {
       ? renderEditorialClaro(slide, index, total, style)
       : style.visualStyle === "bold_contraste"
         ? renderBoldContraste(slide, index, total, style)
-        : renderMinimalOscuro(slide, index, total, style);
+        : style.visualStyle === "bold_impacto"
+          ? renderBoldImpacto(slide, index, total, style)
+          : renderMinimalOscuro(slide, index, total, style);
 
   return new ImageResponse(tree, { width: 1080, height: 1350 });
 }
