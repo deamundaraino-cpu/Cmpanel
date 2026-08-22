@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { stripEmphasis } from "@/lib/emphasis";
 
 type Slide = { titulo: string; cuerpo: string };
 type Beat = { seccion: string; texto: string; edicion?: string };
+
+const COVER_VARIANTS: { value: string; label: string }[] = [
+  { value: "banda", label: "Banda" },
+  { value: "insignia", label: "Insignia" },
+  { value: "subrayado", label: "Subrayado" },
+  { value: "cita", label: "Cita" },
+];
 
 export default function ProposalCard({
   id,
@@ -112,7 +120,7 @@ export default function ProposalCard({
     const text = beats
       .map(
         (b) =>
-          `[${b.seccion.toUpperCase()}]\n${b.texto}${b.edicion ? `\n🎬 ${b.edicion}` : ""}`
+          `[${b.seccion.toUpperCase()}]\n${stripEmphasis(b.texto)}${b.edicion ? `\n🎬 ${b.edicion}` : ""}`
       )
       .join("\n\n");
     await navigator.clipboard.writeText(text);
@@ -278,7 +286,7 @@ export default function ProposalCard({
               <p className="text-xs font-semibold uppercase tracking-wide text-indigo-300">
                 {b.seccion}
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">{b.texto}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">{stripEmphasis(b.texto)}</p>
               {b.edicion && (
                 <p className="mt-2 border-t border-zinc-800/70 pt-2 text-xs text-zinc-500">
                   🎬 {b.edicion}
@@ -286,6 +294,29 @@ export default function ProposalCard({
               )}
             </div>
           ))}
+
+          <div className="mt-1.5">
+            <p className="text-xs font-medium text-zinc-400">🖼️ Portada del video · elige un estilo</p>
+            <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
+              {COVER_VARIANTS.map((v) => (
+                <a
+                  key={v.value}
+                  href={`/api/proposals/${id}/portada?variant=${v.value}`}
+                  download={`portada-${id}-${v.value}.png`}
+                  className="shrink-0 text-center"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/proposals/${id}/portada?variant=${v.value}`}
+                    alt={`Portada ${v.label}`}
+                    className="h-52 w-auto rounded-lg border border-zinc-800 transition hover:border-indigo-500"
+                    loading="lazy"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-500">{v.label}</p>
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="mt-4 flex gap-3 overflow-x-auto pb-2">

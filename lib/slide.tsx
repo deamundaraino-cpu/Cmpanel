@@ -1,4 +1,7 @@
 import { ImageResponse } from "next/og";
+import { parseEmphasis, stripEmphasis } from "./emphasis";
+
+export { parseEmphasis, stripEmphasis };
 
 export type Slide = { titulo: string; cuerpo: string };
 
@@ -35,19 +38,6 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
     hint: "Fondo negro, tu color como acento en la frase clave, jerarquía tipográfica marcada. Portadas con variaciones de diseño automáticas.",
   },
 ];
-
-/** Marca la frase clave de un título envolviéndola en **dobles asteriscos**. */
-export function parseEmphasis(text: string): { text: string; strong: boolean }[] {
-  return text
-    .split(/\*\*(.+?)\*\*/g)
-    .filter((part) => part.length > 0)
-    .map((part, i) => ({ text: part, strong: i % 2 === 1 }));
-}
-
-/** Quita las marcas de énfasis para mostrar el título como texto plano (calendario, pipeline). */
-export function stripEmphasis(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, "$1");
-}
 
 function hashString(text: string): number {
   let h = 0;
@@ -342,7 +332,14 @@ function toWords(segments: { text: string; strong: boolean }[]): Word[] {
   return words;
 }
 
-type CoverVariant = "banda" | "insignia" | "subrayado" | "cita";
+export type CoverVariant = "banda" | "insignia" | "subrayado" | "cita";
+
+export const COVER_VARIANTS: { value: CoverVariant; label: string }[] = [
+  { value: "banda", label: "Banda" },
+  { value: "insignia", label: "Insignia" },
+  { value: "subrayado", label: "Subrayado" },
+  { value: "cita", label: "Cita" },
+];
 
 /** Elige un tratamiento de portada distinto según el contenido, para que los carruseles no se vean repetitivos. */
 function pickCoverVariant(titulo: string): CoverVariant {
@@ -543,6 +540,41 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
       </div>
     </div>
   );
+}
+
+/** Portada de video (Reels/TikTok/Shorts), formato vertical 9:16, mismo tratamiento visual que "Bold impacto". */
+export function renderVideoPortada(opts: { titulo: string; style: BrandStyle; variant?: CoverVariant }) {
+  const { titulo, style } = opts;
+  const accent = style.primary;
+  const variant =
+    opts.variant && COVER_VARIANTS.some((v) => v.value === opts.variant) ? opts.variant : pickCoverVariant(titulo);
+
+  const tree = (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: 80,
+        background: "#0a0a0a",
+        color: "#ffffff",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 30, fontWeight: 800 }}>
+        <BrandMark style={style} size={22} />
+        {style.brandName}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column" }}>{renderCoverTitle(titulo, variant, accent, 92)}</div>
+
+      <div style={{ display: "flex", fontSize: 34, fontWeight: 800, color: accent }}>{style.brandHandle}</div>
+    </div>
+  );
+
+  return new ImageResponse(tree, { width: 1080, height: 1920 });
 }
 
 export function renderSlide(opts: {

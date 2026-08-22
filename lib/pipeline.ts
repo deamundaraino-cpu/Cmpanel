@@ -1,5 +1,5 @@
 import { getSql, ProposalRow } from "./db";
-import { stripEmphasis } from "./slide";
+import { stripEmphasis } from "./emphasis";
 
 /**
  * Al aprobar una propuesta (desde el panel o desde el enlace del cliente),
