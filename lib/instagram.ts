@@ -174,19 +174,40 @@ export type IgComment = {
   text?: string;
   like_count?: number;
   timestamp?: string;
+  username?: string;
+  from?: { id?: string; username?: string };
 };
 
-/** Comentarios de un post (para minería de ideas). */
+/** Nombre del autor del comentario, venga como `username` o dentro de `from`. */
+export function commentAuthor(c: IgComment): string | null {
+  return c.username || c.from?.username || null;
+}
+
+/**
+ * Comentarios de un post (minería de ideas + bandeja de comentarios).
+ * `username` depende del permiso instagram_business_manage_comments: si el
+ * token no lo tiene, la petición con ese campo falla entera, así que se
+ * reintenta sin él para no perder los comentarios.
+ */
 export async function getComments(clientId: number, mediaId: string, limit = 25): Promise<IgComment[]> {
   try {
     const res = await igFetch(clientId, `/${mediaId}/comments`, {
-      fields: "id,text,like_count,timestamp",
+      fields: "id,text,like_count,timestamp,username",
       limit: String(limit),
     });
     return (res.data || []) as IgComment[];
   } catch {
-    // Posts con comentarios desactivados o sin permiso: no es un error fatal.
-    return [];
+    // Reintento sin `username`: mejor comentarios anónimos que ninguno.
+    try {
+      const res = await igFetch(clientId, `/${mediaId}/comments`, {
+        fields: "id,text,like_count,timestamp",
+        limit: String(limit),
+      });
+      return (res.data || []) as IgComment[];
+    } catch {
+      // Posts con comentarios desactivados o sin permiso: no es un error fatal.
+      return [];
+    }
   }
 }
 

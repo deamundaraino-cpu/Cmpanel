@@ -47,6 +47,7 @@ export default async function PanelLayout({
             <NavLink href="/dashboard" icon="home">Dashboard</NavLink>
             <NavLink href="/metricas" icon="chart">Métricas</NavLink>
             <NavLink href="/posts" icon="grid">Publicaciones</NavLink>
+            <NavLink href="/comentarios" icon="chat">Comentarios</NavLink>
           </NavGroup>
           <NavGroup label="Planifica">
             <NavLink href="/calendario" icon="calendar">Calendario</NavLink>

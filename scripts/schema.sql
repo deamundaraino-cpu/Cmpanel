@@ -258,6 +258,9 @@ CREATE TABLE IF NOT EXISTS comments (
   like_count INTEGER DEFAULT 0,
   timestamp TEXT,
   last_synced TEXT,
+  username TEXT,           -- autor; null si el token no tiene permiso de comentarios
+  is_lead INTEGER DEFAULT 0,
+  nota TEXT,
   PRIMARY KEY (client_id, id)
 );
 

@@ -6,6 +6,7 @@ import {
   getStories,
   getStoryInsights,
   getComments,
+  commentAuthor,
   refreshToken,
 } from "./instagram";
 import { recomputeScores } from "./scoring";
@@ -130,13 +131,16 @@ export async function runSync(clientId: number, maxPosts = 100): Promise<SyncRes
       for (const c of comments) {
         if (!c.text?.trim()) continue;
         await sql`
-          INSERT INTO comments (client_id, id, post_id, text, like_count, timestamp, last_synced)
+          INSERT INTO comments (client_id, id, post_id, text, like_count, timestamp, last_synced, username)
           VALUES (${clientId}, ${c.id}, ${p.id}, ${c.text}, ${c.like_count || 0}, ${c.timestamp || null},
-            ${new Date().toISOString()})
+            ${new Date().toISOString()}, ${commentAuthor(c)})
           ON CONFLICT (client_id, id) DO UPDATE SET
             text = EXCLUDED.text,
             like_count = EXCLUDED.like_count,
-            last_synced = EXCLUDED.last_synced
+            last_synced = EXCLUDED.last_synced,
+            -- No pisar un autor ya guardado si esta vez vino vacío (token sin
+            -- permiso): is_lead y nota del gestor tampoco se tocan nunca.
+            username = COALESCE(EXCLUDED.username, comments.username)
         `;
         syncedComments++;
       }

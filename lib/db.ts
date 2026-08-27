@@ -171,4 +171,7 @@ export type CommentRow = {
   like_count: number;
   timestamp: string | null;
   last_synced: string | null;
+  username: string | null; // null si el token no tiene permiso de comentarios
+  is_lead: number;
+  nota: string | null;
 };
