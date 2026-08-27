@@ -7,6 +7,7 @@ type IconName =
   | "megaphone"
   | "lightbulb"
   | "film"
+  | "anchor"
   | "sparkles"
   | "gem"
   | "sliders"
@@ -76,6 +77,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M3.5 15h4.5" />
       <path d="M16 9h4.5" />
       <path d="M16 15h4.5" />
+    </>
+  ),
+  anchor: (
+    <>
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M12 7.5V21" />
+      <path d="M5 12.5H2.5a9.5 9.5 0 0 0 19 0H19" />
     </>
   ),
   sparkles: (

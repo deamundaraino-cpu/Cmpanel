@@ -158,6 +158,20 @@ CREATE TABLE IF NOT EXISTS proposals (
   idea_id BIGINT REFERENCES ideas(id) ON DELETE SET NULL
 );
 
+-- hooks: ganchos que YA funcionaron (post ganador salido de propuesta aprobada).
+-- Por CLIENTE, no por editor: un gancho pertenece a la voz de esa marca.
+CREATE TABLE IF NOT EXISTS hooks (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  texto TEXT NOT NULL,
+  formato TEXT,
+  source_post_id TEXT,
+  source_proposal_id BIGINT,
+  er DOUBLE PRECISION,
+  CONSTRAINT hooks_client_proposal_uni UNIQUE (client_id, source_proposal_id)
+);
+
 -- structures: librería del EDITOR (user_id), compartida entre sus clientes.
 -- user_id NULL = plantilla builtin global visible para todos.
 CREATE TABLE IF NOT EXISTS structures (
@@ -243,6 +257,7 @@ CREATE INDEX IF NOT EXISTS idx_clients_owner ON clients (owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_client_ts ON posts (client_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_stories_client_ts ON stories (client_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_comments_client_post ON comments (client_id, post_id);
+CREATE INDEX IF NOT EXISTS idx_hooks_client ON hooks (client_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_client_fecha ON calendar_items (client_id, fecha);
 CREATE INDEX IF NOT EXISTS idx_ideas_client ON ideas (client_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_client_status ON proposals (client_id, status);
@@ -270,6 +285,7 @@ ALTER TABLE calendar_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hooks ENABLE ROW LEVEL SECURITY;
 
 -- ————— Seed de estructuras de guion builtin (globales, user_id NULL) —————
 

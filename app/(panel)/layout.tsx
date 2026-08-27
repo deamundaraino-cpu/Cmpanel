@@ -57,6 +57,7 @@ export default async function PanelLayout({
             <NavLink href="/ideas" icon="lightbulb">Ideas y nicho</NavLink>
             <NavLink href="/propuestas" icon="sparkles">Propuestas</NavLink>
             <NavLink href="/estructuras" icon="film">Estructuras</NavLink>
+            <NavLink href="/ganchos" icon="anchor">Ganchos</NavLink>
             <NavLink href="/marca" icon="gem">Marca</NavLink>
           </NavGroup>
           <NavGroup label="Gestión">

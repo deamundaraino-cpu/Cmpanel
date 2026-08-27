@@ -1,4 +1,5 @@
 import { getSql, PostRow } from "./db";
+import { extractWinningHooks } from "./hooks";
 
 /**
  * Engagement ponderado: guardados y compartidos pesan más porque son
@@ -63,6 +64,15 @@ export async function recomputeScores(clientId: number): Promise<{ scored: numbe
       `;
     }
   });
+
+  // Este es el momento exacto en que un post "se vuelve" ganador: archivar aquí
+  // el gancho evita depender de que alguien abra una pantalla concreta.
+  // Nunca debe tumbar el recálculo de métricas.
+  try {
+    await extractWinningHooks(clientId);
+  } catch {
+    // El banco de ganchos es accesorio: si falla, las métricas siguen.
+  }
 
   return { scored: posts.length, winners };
 }
