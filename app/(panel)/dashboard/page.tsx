@@ -3,11 +3,13 @@ import { getSql, PostRow } from "@/lib/db";
 import { statsSummary } from "@/lib/scoring";
 import { getSetting } from "@/lib/settings";
 import { briefCompleteness } from "@/lib/brand";
+import { getHealthScore } from "@/lib/health";
 import { formatBreakdown, dayOfWeekBreakdown } from "@/lib/metrics";
 import { requireClient } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import BrainCard from "@/components/BrainCard";
+import HealthScoreCard from "@/components/HealthScoreCard";
 import Sparkline from "@/components/Sparkline";
 import PageHeader from "@/components/PageHeader";
 
@@ -37,6 +39,7 @@ export default async function Dashboard() {
     SELECT COUNT(*)::int AS n FROM comments WHERE client_id = ${clientId}
   `;
   const brief = await briefCompleteness(clientId);
+  const health = await getHealthScore(clientId);
   const formats = formatBreakdown(posts).sort((a, b) => b.value - a.value);
   const bestFormat =
     formats[0] && avgEr > 0
@@ -86,6 +89,10 @@ export default async function Dashboard() {
           </>
         }
       />
+
+      <div className="mt-6">
+        <HealthScoreCard health={health} />
+      </div>
 
       <div className="mt-6">
         <BrainCard

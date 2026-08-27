@@ -19,6 +19,7 @@ const KEYS = [
   "brand_tone",
   "brand_pillars",
   "brand_objectives",
+  "content_target_per_week",
   "brand_avoid",
 ];
 
@@ -372,6 +373,17 @@ export default function BrandForm() {
             onChange={set("brand_objectives")}
             rows={3}
             placeholder="Ej: posicionarme como referente en publicidad para pymes, generar leads para el servicio de auditorías, lanzar un infoproducto en 3 meses."
+          />
+        </div>
+        <div className="mt-3 max-w-xs">
+          <Field
+            label="Publicaciones por semana (objetivo)"
+            type="number"
+            min={1}
+            max={21}
+            value={s.content_target_per_week || ""}
+            onChange={set("content_target_per_week")}
+            hint="Contra esto se mide el ritmo real en el Dashboard. Si lo dejas vacío se asume 3."
           />
         </div>
       </section>

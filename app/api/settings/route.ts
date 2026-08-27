@@ -25,6 +25,7 @@ const KEYS = [
   "brand_pillars",
   "brand_objectives",
   "brand_avoid",
+  "content_target_per_week",
 ];
 
 const SECRET_KEYS = new Set(["ig_token"]);
