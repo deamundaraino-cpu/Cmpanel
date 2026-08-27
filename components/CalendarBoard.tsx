@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PILARES, PILAR_META, toPilar } from "@/lib/pilares";
 
 type Item = {
   id: number;
@@ -11,6 +12,7 @@ type Item = {
   estado: string;
   campaign_id: number | null;
   notas: string | null;
+  pilar: string | null;
 };
 
 type Campaign = { id: number; nombre: string; color: string };
@@ -45,6 +47,7 @@ export default function CalendarBoard({
   const [titulo, setTitulo] = useState("");
   const [formato, setFormato] = useState("carrusel");
   const [campaignId, setCampaignId] = useState<string>("");
+  const [pilar, setPilar] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   const [year, mon] = month.split("-").map(Number);
@@ -72,10 +75,12 @@ export default function CalendarBoard({
         titulo,
         formato,
         campaign_id: campaignId ? Number(campaignId) : null,
+        pilar: pilar || null,
       }),
     });
     setBusy(false);
     setTitulo("");
+    setPilar("");
     setAddingDay(null);
     router.refresh();
   }
@@ -144,6 +149,7 @@ export default function CalendarBoard({
                 <div className="mt-1 grid gap-1">
                   {(byDay.get(fecha) || []).map((it) => {
                     const camp = it.campaign_id ? campaignById.get(it.campaign_id) : null;
+                    const p = toPilar(it.pilar);
                     return (
                       <div
                         key={it.id}
@@ -158,6 +164,12 @@ export default function CalendarBoard({
                             <span
                               className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
                               style={{ background: camp.color }}
+                            />
+                          )}
+                          {p && (
+                            <span
+                              className={`mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle ${PILAR_META[p].dot}`}
+                              title={PILAR_META[p].short}
                             />
                           )}
                           {it.titulo}
@@ -194,6 +206,18 @@ export default function CalendarBoard({
                       <option value="reel">Reel</option>
                       <option value="imagen">Imagen</option>
                       <option value="historia">Historia</option>
+                    </select>
+                    <select
+                      value={pilar}
+                      onChange={(e) => setPilar(e.target.value)}
+                      className="w-full rounded border border-zinc-700 bg-zinc-900 px-1 py-1 text-[10px] outline-none"
+                    >
+                      <option value="">Sin pilar</option>
+                      {PILARES.map((p) => (
+                        <option key={p} value={p}>
+                          {PILAR_META[p].label}
+                        </option>
+                      ))}
                     </select>
                     {campaigns.length > 0 && (
                       <select

@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import BrainCard from "@/components/BrainCard";
 import HealthScoreCard from "@/components/HealthScoreCard";
+import PilarMixCard from "@/components/PilarMixCard";
 import Sparkline from "@/components/Sparkline";
 import PageHeader from "@/components/PageHeader";
 
@@ -92,6 +93,14 @@ export default async function Dashboard() {
 
       <div className="mt-6">
         <HealthScoreCard health={health} />
+      </div>
+
+      <div className="mt-6">
+        <PilarMixCard
+          mix={health.mix}
+          titulo="Mezcla de pilares"
+          contexto="Piezas del calendario · últimos 30 días"
+        />
       </div>
 
       <div className="mt-6">

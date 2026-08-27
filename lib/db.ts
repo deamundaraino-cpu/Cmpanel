@@ -93,6 +93,8 @@ export type ProposalRow = {
   quality_notes: string | null;
   share_token: string | null;
   client_feedback: string | null;
+  pilar: string | null;
+  idea_id: number | null;
 };
 
 export type StructureBeat = { nombre: string; guia: string };
@@ -130,6 +132,7 @@ export type CalendarItemRow = {
   campaign_id: number | null;
   proposal_id: number | null;
   notas: string | null;
+  pilar: string | null;
 };
 
 export type ReportRow = {

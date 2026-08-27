@@ -2,6 +2,7 @@ import { getSql } from "./db";
 import { getSetting } from "./settings";
 import { briefCompleteness } from "./brand";
 import { computeAlerts, type Alert } from "./alerts";
+import { pilarMix, type PilarMix } from "./pilares";
 
 /** Ritmo de publicación por defecto si el cliente no fijó objetivo en 🧠 Marca. */
 export const DEFAULT_TARGET_PER_WEEK = 3;
@@ -46,10 +47,25 @@ export async function getPostingCadence(clientId: number, days = 28): Promise<Ca
   };
 }
 
+/**
+ * Mezcla de pilares de lo realmente planificado/producido (calendar_items),
+ * no de las ideas generadas: una idea sin ejecutar no es contenido.
+ */
+export async function getPilarMix(clientId: number, days = 30): Promise<PilarMix> {
+  const sql = getSql();
+  const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  const rows = await sql<{ pilar: string | null }[]>`
+    SELECT pilar FROM calendar_items
+    WHERE client_id = ${clientId} AND fecha >= ${since}
+  `;
+  return pilarMix(rows);
+}
+
 export type HealthScore = {
   brand: { filled: number; total: number };
   cadence: Cadence;
   alerts: Alert[];
+  mix: PilarMix;
   score: number; // 0-100
 };
 
@@ -80,11 +96,12 @@ export function computeScore(input: {
  * Métricas e Ideas.
  */
 export async function getHealthScore(clientId: number): Promise<HealthScore> {
-  const [brand, cadence, alerts] = await Promise.all([
+  const [brand, cadence, alerts, mix] = await Promise.all([
     briefCompleteness(clientId),
     getPostingCadence(clientId),
     computeAlerts(clientId),
+    getPilarMix(clientId),
   ]);
 
-  return { brand, cadence, alerts, score: computeScore({ brand, cadence, alerts }) };
+  return { brand, cadence, alerts, mix, score: computeScore({ brand, cadence, alerts }) };
 }

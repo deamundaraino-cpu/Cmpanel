@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getSql, CalendarItemRow, CampaignRow } from "@/lib/db";
 import { requireClient } from "@/lib/auth";
 import CalendarBoard from "@/components/CalendarBoard";
+import PilarMixCard from "@/components/PilarMixCard";
+import { pilarMix } from "@/lib/pilares";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,13 @@ export default async function CalendarPage({
             →
           </Link>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <PilarMixCard
+          mix={pilarMix(items)}
+          contexto={`${items.length} pieza${items.length === 1 ? "" : "s"} en ${monthLabel}`}
+        />
       </div>
 
       <div className="mt-6">

@@ -7,6 +7,7 @@ import { buildBrandBrief } from "@/lib/brand";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getTavilyKey } from "@/lib/appSettings";
 import { formatBreakdown, dayOfWeekBreakdown } from "@/lib/metrics";
+import { PILARES, type Pilar } from "@/lib/pilares";
 
 export const maxDuration = 120;
 
@@ -19,8 +20,6 @@ type Idea = {
   evidencia?: { tipo: string; detalle: string };
 };
 
-const PILARES = ["crecimiento", "adoctrinamiento", "conversion"] as const;
-type Pilar = (typeof PILARES)[number];
 
 const PILAR_GUIDE: Record<Pilar, string> = {
   crecimiento:

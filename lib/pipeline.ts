@@ -32,8 +32,9 @@ export async function ensurePipelineItem(proposal: ProposalRow): Promise<void> {
 
   const hoy = new Date().toISOString().slice(0, 10);
   await sql`
-    INSERT INTO calendar_items (client_id, created_at, fecha, titulo, formato, estado, campaign_id, proposal_id, notas)
+    INSERT INTO calendar_items (client_id, created_at, fecha, titulo, formato, estado, campaign_id, proposal_id, notas, pilar)
     VALUES (${proposal.client_id}, ${new Date().toISOString()}, ${hoy}, ${titulo},
-      ${proposal.formato === "guion_video" ? "guion_video" : "carrusel"}, 'idea', NULL, ${proposal.id}, '')
+      ${proposal.formato === "guion_video" ? "guion_video" : "carrusel"}, 'idea', NULL, ${proposal.id}, '',
+      ${proposal.pilar ?? null})
   `;
 }

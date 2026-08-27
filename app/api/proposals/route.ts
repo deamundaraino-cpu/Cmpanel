@@ -11,6 +11,7 @@ import {
   clampQuality,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
+import { toPilar } from "@/lib/pilares";
 
 export const maxDuration = 120;
 
@@ -55,8 +56,26 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { userId, clientId } = auth;
   try {
-    const { postId, tema, formato, structureId } = await req.json().catch(() => ({}));
+    const { postId, tema, formato, structureId, ideaId, pilar } = await req
+      .json()
+      .catch(() => ({}));
     const sql = getSql();
+
+    // Trazabilidad de pilar: se valida contra la idea real del cliente, no se
+    // confía en lo que mande el navegador (y evita idea_id de otro cliente).
+    let ideaRef: number | null = null;
+    let pilarRef: string | null = null;
+    if (ideaId) {
+      const [idea] = await sql<{ id: number; pilar: string | null }[]>`
+        SELECT id, pilar FROM ideas
+        WHERE client_id = ${clientId} AND id = ${Number(ideaId)}
+      `;
+      if (idea) {
+        ideaRef = idea.id;
+        pilarRef = toPilar(idea.pilar);
+      }
+    }
+    if (!pilarRef) pilarRef = toPilar(pilar);
     const brief = await buildBrandBrief(clientId);
     const kind = formato === "guion_video" ? "guion_video" : "carrusel";
 
@@ -79,10 +98,10 @@ export async function POST(req: NextRequest) {
       const q = clampQuality(gen.calidad);
 
       const [row] = await sql<{ id: number }[]>`
-        INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
+        INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
         VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
           ${JSON.stringify(gen.slides)}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
-          NULL, ${q.score}, ${q.notes})
+          NULL, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
         RETURNING id
       `;
       return NextResponse.json({ ok: true, id: row.id, slides: gen.slides.length });
@@ -110,10 +129,10 @@ export async function POST(req: NextRequest) {
     const q = clampQuality(gen.calidad);
 
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes)
+      INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
       VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
         ${JSON.stringify(gen.beats)}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
-        ${structure.id}, ${q.score}, ${q.notes})
+        ${structure.id}, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
       RETURNING id
     `;
     return NextResponse.json({ ok: true, id: row.id, beats: gen.beats.length });

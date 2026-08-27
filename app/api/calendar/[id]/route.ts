@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
 import { getSql } from "@/lib/db";
+import { toPilar } from "@/lib/pilares";
 
-const EDITABLE = ["fecha", "titulo", "formato", "estado", "campaign_id", "notas"] as const;
+const EDITABLE = ["fecha", "titulo", "formato", "estado", "campaign_id", "notas", "pilar"] as const;
 const VALID_STATES = new Set(["idea", "en_diseno", "listo", "publicado"]);
 
 export async function PATCH(
@@ -19,7 +20,10 @@ export async function PATCH(
     }
     const patch: Record<string, string | number | null> = {};
     for (const key of EDITABLE) {
-      if (key in body) patch[key] = body[key] ?? null;
+      if (!(key in body)) continue;
+      // El pilar se normaliza: vacío o valor inventado queda en NULL en vez de
+      // ensuciar la mezcla con etiquetas que no existen.
+      patch[key] = key === "pilar" ? toPilar(body[key]) : body[key] ?? null;
     }
     const keys = Object.keys(patch);
     if (!keys.length) return fail(new Error("Nada que actualizar"), 400);

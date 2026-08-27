@@ -8,10 +8,15 @@ type Structure = { id: number; nombre: string; is_builtin: number };
 export default function CreateProposalControl({
   postId,
   tema,
+  ideaId,
+  pilar,
   label = "Crear contenido",
 }: {
   postId?: string;
   tema?: string;
+  /** Idea de origen: sin esto el pilar se pierde y no se puede medir la mezcla. */
+  ideaId?: number;
+  pilar?: string | null;
   label?: string;
 }) {
   const [structures, setStructures] = useState<Structure[]>([]);
@@ -38,6 +43,8 @@ export default function CreateProposalControl({
       const body: Record<string, unknown> = { formato };
       if (postId) body.postId = postId;
       else body.tema = tema;
+      if (ideaId) body.ideaId = ideaId;
+      if (pilar) body.pilar = pilar;
       if (formato === "guion_video") body.structureId = structureId;
 
       const res = await fetch("/api/proposals", {

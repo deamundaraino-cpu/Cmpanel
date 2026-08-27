@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
 import { getSql } from "@/lib/db";
+import { toPilar } from "@/lib/pilares";
 
 export async function GET(req: NextRequest) {
   const auth = await guardClient();
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   try {
-    const { fecha, titulo, formato, campaign_id, notas } = await req.json();
+    const { fecha, titulo, formato, campaign_id, notas, pilar } = await req.json();
     if (typeof fecha !== "string" || !fecha.trim()) {
       return fail(new Error("Falta la fecha"), 400);
     }
@@ -32,9 +33,9 @@ export async function POST(req: NextRequest) {
     }
     const sql = getSql();
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO calendar_items (client_id, created_at, fecha, titulo, formato, estado, campaign_id, notas)
+      INSERT INTO calendar_items (client_id, created_at, fecha, titulo, formato, estado, campaign_id, notas, pilar)
       VALUES (${auth.clientId}, ${new Date().toISOString()}, ${fecha}, ${titulo.trim()},
-        ${formato || "carrusel"}, 'idea', ${campaign_id || null}, ${notas || ""})
+        ${formato || "carrusel"}, 'idea', ${campaign_id || null}, ${notas || ""}, ${toPilar(pilar)})
       RETURNING id
     `;
     return NextResponse.json({ ok: true, id: row.id });

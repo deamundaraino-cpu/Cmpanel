@@ -151,7 +151,11 @@ CREATE TABLE IF NOT EXISTS proposals (
   quality INTEGER,
   quality_notes TEXT,
   share_token TEXT UNIQUE,
-  client_feedback TEXT
+  client_feedback TEXT,
+  -- Trazabilidad de pilar: de qué idea salió y a qué pilar pertenece,
+  -- para poder medir la mezcla real de contenido producido.
+  pilar TEXT,
+  idea_id BIGINT REFERENCES ideas(id) ON DELETE SET NULL
 );
 
 -- structures: librería del EDITOR (user_id), compartida entre sus clientes.
@@ -189,7 +193,8 @@ CREATE TABLE IF NOT EXISTS calendar_items (
   estado TEXT NOT NULL DEFAULT 'idea',
   campaign_id BIGINT,
   proposal_id BIGINT,
-  notas TEXT
+  notas TEXT,
+  pilar TEXT
 );
 
 CREATE TABLE IF NOT EXISTS reports (

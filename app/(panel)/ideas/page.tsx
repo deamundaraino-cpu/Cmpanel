@@ -5,6 +5,7 @@ import { requireClient } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
 import { getTavilyKey } from "@/lib/appSettings";
 import ResearchControl from "@/components/ResearchControl";
+import { PILARES, PILAR_META, toPilar } from "@/lib/pilares";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,6 @@ type IdeaRow = {
   razon: string | null;
   pilar: string | null;
   evidencia: string | null;
-};
-
-const PILAR_META: Record<string, { label: string; badge: string }> = {
-  crecimiento: { label: "📈 Crecimiento", badge: "bg-sky-600/20 text-sky-300" },
-  adoctrinamiento: { label: "🧲 Adoctrinamiento", badge: "bg-violet-600/20 text-violet-300" },
-  conversion: { label: "🎯 Conversión", badge: "bg-amber-600/20 text-amber-300" },
 };
 
 // Los "recibos" de la IA: en qué dato real se basa cada idea.
@@ -45,9 +40,7 @@ function parseEvidencia(raw: string | null): { tipo: string; detalle: string } |
 
 const FILTERS = [
   { value: "", label: "Todas" },
-  { value: "crecimiento", label: "📈 Crecimiento" },
-  { value: "adoctrinamiento", label: "🧲 Adoctrinamiento" },
-  { value: "conversion", label: "🎯 Conversión" },
+  ...PILARES.map((p) => ({ value: p as string, label: PILAR_META[p].label })),
 ];
 
 export default async function IdeasPage({
@@ -56,9 +49,7 @@ export default async function IdeasPage({
   searchParams: Promise<{ pilar?: string }>;
 }) {
   const sp = await searchParams;
-  const filter = ["crecimiento", "adoctrinamiento", "conversion"].includes(sp.pilar || "")
-    ? sp.pilar!
-    : "";
+  const filter = toPilar(sp.pilar) ?? "";
 
   const { clientId } = await requireClient();
   const sql = getSql();
@@ -103,7 +94,8 @@ export default async function IdeasPage({
 
       <div className="mt-4 grid gap-3">
         {ideas.map((idea) => {
-          const meta = idea.pilar ? PILAR_META[idea.pilar] : null;
+          const p = toPilar(idea.pilar);
+          const meta = p ? PILAR_META[p] : null;
           const ev = parseEvidencia(idea.evidencia);
           const evMeta = ev ? EVIDENCIA_META[ev.tipo] : null;
           return (
@@ -139,6 +131,8 @@ export default async function IdeasPage({
               <div className="mt-3">
                 <CreateProposalControl
                   tema={`${idea.tema} — ${idea.angulo || ""}`}
+                  ideaId={idea.id}
+                  pilar={idea.pilar}
                   label="Crear contenido"
                 />
               </div>
