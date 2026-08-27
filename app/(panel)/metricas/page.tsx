@@ -10,6 +10,7 @@ import {
 } from "@/lib/metrics";
 import { computeAlerts } from "@/lib/alerts";
 import { requireClient } from "@/lib/auth";
+import LeadCounter from "@/components/LeadCounter";
 import BarChart from "@/components/charts/BarChart";
 import LineChart from "@/components/charts/LineChart";
 import DeltaTile from "@/components/charts/DeltaTile";
@@ -146,6 +147,10 @@ export default async function MetricsPage({
           </div>
         </div>
       )}
+
+      <div className="mt-6">
+        <LeadCounter />
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <DeltaTile

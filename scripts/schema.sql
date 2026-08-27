@@ -158,6 +158,16 @@ CREATE TABLE IF NOT EXISTS proposals (
   idea_id BIGINT REFERENCES ideas(id) ON DELETE SET NULL
 );
 
+-- lead_counts: leads captados por semana, introducidos a mano. Es el único
+-- dato de negocio real (Instagram no lo expone) y alimenta los informes.
+CREATE TABLE IF NOT EXISTS lead_counts (
+  client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  week_start TEXT NOT NULL, -- lunes de la semana, YYYY-MM-DD
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (client_id, week_start)
+);
+
 -- hooks: ganchos que YA funcionaron (post ganador salido de propuesta aprobada).
 -- Por CLIENTE, no por editor: un gancho pertenece a la voz de esa marca.
 CREATE TABLE IF NOT EXISTS hooks (
@@ -286,6 +296,7 @@ ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hooks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_counts ENABLE ROW LEVEL SECURITY;
 
 -- ————— Seed de estructuras de guion builtin (globales, user_id NULL) —————
 

@@ -4,6 +4,7 @@ import { getSql, PostRow } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
+import { getLeadWeeks } from "@/lib/leads";
 
 export const maxDuration = 120;
 
@@ -64,9 +65,22 @@ export async function POST(req: NextRequest) {
     if (!quota.ok) return quotaExceeded(quota);
 
     const brief = await buildBrandBrief(clientId);
+
+    // Leads: el único dato de negocio real que tenemos. Si el usuario los
+    // registra, el informe compara resultado contra alcance en vez de quedarse
+    // en métricas de vanidad.
+    const leadWeeks = await getLeadWeeks(clientId, 8);
+    const leadsBloque = leadWeeks.length
+      ? `\n\nLeads captados por semana (dato introducido a mano por el cliente, es el resultado de negocio real):\n${leadWeeks
+          .map((w) => `- semana del ${w.week_start}: ${w.count}`)
+          .join(
+            "\n"
+          )}\nCompara SIEMPRE esta tendencia con la de alcance/engagement: si el alcance sube pero los leads no, dilo claramente.`
+      : `\n\nEl cliente todavía no registra leads captados (Métricas → Leads captados). Señala en los riesgos que sin ese dato el informe solo puede medir alcance y engagement, no resultado de negocio.`;
+
     const report = await chatJson<ReportContent>(
       `Eres un CM senior que entrega informes de rendimiento ejecutivos, claros y accionables en español. Nada de relleno corporativo.\n\nFicha de marca:\n${brief}`,
-      `Informe de los últimos ${periodDays} días:\n- Posts publicados: ${posts.length}\n- Alcance total: ${totalReach}\n- Engagement medio: ${(avgEr * 100).toFixed(2)}%\n- Posts ganadores: ${winners}\n\nTop 3 posts:\n${JSON.stringify(top, null, 1)}\n\nPosts más flojos:\n${JSON.stringify(bottom, null, 1)}\n\nDevuelve JSON:\n{"resumen": "diagnóstico ejecutivo en 2-3 frases", "aciertos": ["qué funcionó y por qué, con datos"], "riesgos": ["qué vigilar o corregir"], "recomendaciones": ["acciones concretas para el próximo periodo"]}`
+      `Informe de los últimos ${periodDays} días:\n- Posts publicados: ${posts.length}\n- Alcance total: ${totalReach}\n- Engagement medio: ${(avgEr * 100).toFixed(2)}%\n- Posts ganadores: ${winners}\n\nTop 3 posts:\n${JSON.stringify(top, null, 1)}\n\nPosts más flojos:\n${JSON.stringify(bottom, null, 1)}${leadsBloque}\n\nDevuelve JSON:\n{"resumen": "diagnóstico ejecutivo en 2-3 frases", "aciertos": ["qué funcionó y por qué, con datos"], "riesgos": ["qué vigilar o corregir"], "recomendaciones": ["acciones concretas para el próximo periodo"]}`
     );
 
     const [row] = await sql<{ id: number }[]>`

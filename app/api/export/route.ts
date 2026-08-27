@@ -16,6 +16,8 @@ const CLIENT_TABLES = [
   "reports",
   "stories",
   "comments",
+  "hooks",
+  "lead_counts",
 ] as const;
 
 /** Copia de seguridad completa en JSON: TODOS los clientes del editor + su librería de estructuras. */
