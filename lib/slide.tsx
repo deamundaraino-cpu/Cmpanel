@@ -12,6 +12,7 @@ export type BrandStyle = {
   brandHandle: string;
   primary: string;
   secondary: string;
+  extra?: string[]; // colores adicionales de la paleta, en orden de preferencia
   visualStyle: VisualStyle;
   logo?: string | null; // data URI, opcional
 };
@@ -30,7 +31,7 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
   {
     value: "bold_contraste",
     label: "Bold contraste",
-    hint: "Fondo a todo color con tu marca, texto grande en blanco. Máximo impacto, ideal para hooks.",
+    hint: "Fondo a todo color con tu paleta, texto grande adaptado al contraste. Máximo impacto, ideal para hooks.",
   },
   {
     value: "bold_impacto",
@@ -45,15 +46,46 @@ function hashString(text: string): number {
   return h;
 }
 
-/** Blanco o negro según cuál contraste mejor sobre el color dado. */
-function contrastText(hex: string): string {
+function luminance(hex: string): number {
   const clean = hex.replace("#", "");
-  if (clean.length !== 6) return "#000000";
+  if (clean.length !== 6) return 0;
   const r = parseInt(clean.slice(0, 2), 16);
   const g = parseInt(clean.slice(2, 4), 16);
   const b = parseInt(clean.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? "#0a0a0a" : "#ffffff";
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/** Blanco o negro según cuál contraste mejor sobre el color dado. */
+function contrastText(hex: string): string {
+  return luminance(hex) > 0.6 ? "#0a0a0a" : "#ffffff";
+}
+
+/** Blanco o negro según cuál contraste mejor sobre un degradado de dos colores. */
+function contrastTextForPair(a: string, b: string): string {
+  return (luminance(a) + luminance(b)) / 2 > 0.6 ? "#0a0a0a" : "#ffffff";
+}
+
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+/** Paleta completa de marca: primario, secundario y extras válidos, sin duplicados. */
+function getPalette(style: BrandStyle): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of [style.primary, style.secondary, ...(style.extra || [])]) {
+    const v = (c || "").toLowerCase();
+    if (HEX_RE.test(v) && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out.length ? out : ["#e8590c"];
+}
+
+/** Elige un color de la paleta de forma determinística según una semilla (para variar sin ser aleatorio). */
+function pickFromPalette(palette: string[], seed: string | number, offset = 0): string {
+  const base = typeof seed === "number" ? seed : hashString(seed);
+  const idx = ((base + offset) % palette.length + palette.length) % palette.length;
+  return palette[idx];
 }
 
 function BrandMark({ style, size = 18 }: { style: BrandStyle; size?: number }) {
@@ -84,6 +116,8 @@ function BrandMark({ style, size = 18 }: { style: BrandStyle; size?: number }) {
 function renderMinimalOscuro(slide: Slide, index: number, total: number, style: BrandStyle) {
   const isCover = index === 0;
   const isLast = index === total - 1;
+  const palette = getPalette(style);
+  const accent = isCover ? style.primary : pickFromPalette(palette, slide.titulo || index, index);
   return (
     <div
       style={{
@@ -108,14 +142,15 @@ function renderMinimalOscuro(slide: Slide, index: number, total: number, style: 
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
+        <div style={{ display: "flex", width: 56, height: 6, borderRadius: 3, background: accent }} />
         <div
           style={{
             display: "flex",
             fontSize: isCover ? 84 : 60,
             fontWeight: 700,
             lineHeight: 1.15,
-            color: isCover ? style.primary : "#f5f6f8",
+            color: isCover ? accent : "#f5f6f8",
           }}
         >
           {slide.titulo}
@@ -147,6 +182,9 @@ function renderMinimalOscuro(slide: Slide, index: number, total: number, style: 
 
 function renderEditorialClaro(slide: Slide, index: number, total: number, style: BrandStyle) {
   const isLast = index === total - 1;
+  const palette = getPalette(style);
+  const isCover = index === 0;
+  const accent = isCover ? style.primary : pickFromPalette(palette, slide.titulo || index, index);
   return (
     <div
       style={{
@@ -179,8 +217,8 @@ function renderEditorialClaro(slide: Slide, index: number, total: number, style:
               display: "flex",
               fontSize: 24,
               fontWeight: 800,
-              color: "#ffffff",
-              background: style.primary,
+              color: contrastText(accent),
+              background: accent,
               borderRadius: 999,
               padding: "6px 18px",
             }}
@@ -196,7 +234,7 @@ function renderEditorialClaro(slide: Slide, index: number, total: number, style:
               width: 88,
               height: 8,
               borderRadius: 4,
-              background: style.secondary,
+              background: accent,
             }}
           />
           <div style={{ display: "flex", fontSize: 62, fontWeight: 800, lineHeight: 1.12, color: "#16181d" }}>
@@ -233,6 +271,18 @@ function renderEditorialClaro(slide: Slide, index: number, total: number, style:
 function renderBoldContraste(slide: Slide, index: number, total: number, style: BrandStyle) {
   const isCover = index === 0;
   const isLast = index === total - 1;
+  const palette = getPalette(style);
+  // La portada siempre usa el par primario→secundario (la firma de marca);
+  // el resto del carrusel rota por la paleta completa para dar variedad sin perder coherencia.
+  const bgFrom = isCover || palette.length < 2 ? style.primary : pickFromPalette(palette, slide.titulo || index, index);
+  const bgTo = isCover || palette.length < 2 ? style.secondary : pickFromPalette(palette, slide.titulo || index, index + 1);
+  const text = contrastTextForPair(bgFrom, bgTo);
+  const isDark = text === "#ffffff";
+  const chipBg = isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.55)";
+  const chipText = isDark ? "#ffffff" : "#0a0a0a";
+  const borderColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(10,10,10,0.25)";
+  const bodyColor = isDark ? "rgba(255,255,255,0.92)" : "rgba(10,10,10,0.78)";
+  const footerColor = isDark ? "rgba(255,255,255,0.85)" : "rgba(10,10,10,0.7)";
   return (
     <div
       style={{
@@ -242,8 +292,8 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
         flexDirection: "column",
         justifyContent: "space-between",
         padding: 72,
-        background: `linear-gradient(150deg, ${style.primary} 0%, ${style.secondary} 100%)`,
-        color: "#ffffff",
+        background: `linear-gradient(150deg, ${bgFrom} 0%, ${bgTo} 100%)`,
+        color: text,
         fontFamily: "sans-serif",
       }}
     >
@@ -255,8 +305,8 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
             gap: 14,
             fontSize: 28,
             fontWeight: 800,
-            color: "#ffffff",
-            background: "rgba(0,0,0,0.22)",
+            color: chipText,
+            background: chipBg,
             borderRadius: 999,
             padding: "8px 18px 8px 12px",
           }}
@@ -269,8 +319,8 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
             display: "flex",
             fontSize: 26,
             fontWeight: 800,
-            color: "#ffffff",
-            background: "rgba(0,0,0,0.22)",
+            color: chipText,
+            background: chipBg,
             borderRadius: 999,
             padding: "6px 16px",
           }}
@@ -287,14 +337,14 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
             fontWeight: 900,
             lineHeight: 1.05,
             letterSpacing: -1,
-            color: "#ffffff",
-            textShadow: "0 4px 24px rgba(0,0,0,0.25)",
+            color: text,
+            textShadow: isDark ? "0 4px 24px rgba(0,0,0,0.25)" : "none",
           }}
         >
           {slide.titulo}
         </div>
         {slide.cuerpo ? (
-          <div style={{ display: "flex", fontSize: 38, lineHeight: 1.4, color: "rgba(255,255,255,0.92)" }}>
+          <div style={{ display: "flex", fontSize: 38, lineHeight: 1.4, color: bodyColor }}>
             {slide.cuerpo}
           </div>
         ) : null}
@@ -305,14 +355,14 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          borderTop: "3px solid rgba(255,255,255,0.35)",
+          borderTop: `3px solid ${borderColor}`,
           paddingTop: 32,
         }}
       >
-        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: "#ffffff" }}>
+        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: text }}>
           {style.brandHandle}
         </div>
-        <div style={{ display: "flex", fontSize: 28, color: "rgba(255,255,255,0.85)" }}>
+        <div style={{ display: "flex", fontSize: 28, color: footerColor }}>
           {isLast ? "Guarda este post »" : "Desliza »"}
         </div>
       </div>
@@ -474,7 +524,10 @@ function renderCoverTitle(titulo: string, variant: CoverVariant, accent: string,
 function renderBoldImpacto(slide: Slide, index: number, total: number, style: BrandStyle) {
   const isCover = index === 0;
   const isLast = index === total - 1;
-  const accent = style.primary;
+  const palette = getPalette(style);
+  // La portada usa siempre el color primario (firma de marca); el resto del
+  // carrusel rota por la paleta completa para que cada slide resalte distinto.
+  const accent = isCover ? style.primary : pickFromPalette(palette, slide.titulo || index, index);
   const variant = isCover ? pickCoverVariant(slide.titulo) : "banda";
   const titleSize = isCover ? 76 : 54;
   const words = toWords(parseEmphasis(slide.titulo.toUpperCase()));
@@ -533,7 +586,9 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
           paddingTop: 32,
         }}
       >
-        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: accent }}>{style.brandHandle}</div>
+        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: style.primary }}>
+          {style.brandHandle}
+        </div>
         <div style={{ display: "flex", fontSize: 26, color: "rgba(255,255,255,0.6)" }}>
           {isLast ? "Guarda este post »" : "Desliza »"}
         </div>

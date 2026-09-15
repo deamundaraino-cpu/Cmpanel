@@ -38,7 +38,7 @@ const VISUAL_STYLES = [
   {
     value: "bold_contraste",
     label: "Bold contraste",
-    hint: "Fondo a todo color, texto grande en blanco. Máximo impacto para hooks.",
+    hint: "Fondo a todo color con tu paleta, texto grande adaptado al contraste. Máximo impacto para hooks.",
   },
   {
     value: "bold_impacto",

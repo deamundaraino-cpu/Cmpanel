@@ -59,17 +59,26 @@ export async function buildBrandStyle(clientId: number): Promise<BrandStyle> {
     "brand_handle",
     "brand_color",
     "brand_color_secondary",
+    "brand_colors_extra",
     "brand_visual_style",
     "brand_logo",
   ]);
   const visualStyle = VALID_STYLES.includes(s.brand_visual_style as VisualStyle)
     ? (s.brand_visual_style as VisualStyle)
     : "minimal_oscuro";
+  let extra: string[] = [];
+  try {
+    const arr = JSON.parse(s.brand_colors_extra || "[]");
+    if (Array.isArray(arr)) extra = arr.filter((c) => typeof c === "string");
+  } catch {
+    extra = [];
+  }
   return {
     brandName: s.brand_name || "Tu Marca",
     brandHandle: s.brand_handle || "@tumarca",
     primary: s.brand_color || "#e8590c",
     secondary: s.brand_color_secondary || "#3987e5",
+    extra,
     visualStyle,
     logo: s.brand_logo || null,
   };
