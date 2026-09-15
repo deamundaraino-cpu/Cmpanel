@@ -15,6 +15,7 @@ const KEYS = [
   "brand_handle",
   "brand_color",
   "brand_color_secondary",
+  "brand_colors_extra",
   "brand_visual_style",
   "brand_logo",
   "brand_niche",

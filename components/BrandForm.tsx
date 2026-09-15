@@ -10,6 +10,7 @@ const KEYS = [
   "brand_handle",
   "brand_color",
   "brand_color_secondary",
+  "brand_colors_extra",
   "brand_visual_style",
   "brand_logo",
   "brand_niche",
@@ -61,6 +62,16 @@ function Field({
       {hint && <span className="mt-1 block text-xs text-zinc-600">{hint}</span>}
     </label>
   );
+}
+
+function parseExtraColors(raw: string | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((c) => typeof c === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function TextArea({
@@ -125,6 +136,32 @@ export default function BrandForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  const extraColors = parseExtraColors(s.brand_colors_extra);
+
+  function setExtraColor(i: number, value: string) {
+    setS((prev) => {
+      const arr = parseExtraColors(prev.brand_colors_extra);
+      arr[i] = value;
+      return { ...prev, brand_colors_extra: JSON.stringify(arr) };
+    });
+  }
+
+  function addExtraColor() {
+    setS((prev) => {
+      const arr = parseExtraColors(prev.brand_colors_extra);
+      arr.push("#888888");
+      return { ...prev, brand_colors_extra: JSON.stringify(arr) };
+    });
+  }
+
+  function removeExtraColor(i: number) {
+    setS((prev) => {
+      const arr = parseExtraColors(prev.brand_colors_extra);
+      arr.splice(i, 1);
+      return { ...prev, brand_colors_extra: JSON.stringify(arr) };
+    });
   }
 
   function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -211,6 +248,50 @@ export default function BrandForm() {
               />
             </div>
           </label>
+        </div>
+
+        <div className="mt-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-400">Colores extra (opcional)</span>
+            <button
+              type="button"
+              onClick={addExtraColor}
+              className="rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 transition hover:bg-zinc-700"
+            >
+              + Agregar color
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-zinc-600">
+            Para paletas con más de dos colores: acentos, fondos alternativos, etc.
+          </p>
+          {extraColors.length > 0 && (
+            <div className="mt-3 grid gap-2">
+              {extraColors.map((color, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-f]{6}$/i.test(color) ? color : "#888888"}
+                    onChange={(e) => setExtraColor(i, e.target.value)}
+                    className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950"
+                  />
+                  <input
+                    value={color}
+                    onChange={(e) => setExtraColor(i, e.target.value)}
+                    placeholder="#888888"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeExtraColor(i)}
+                    aria-label="Quitar color"
+                    className="shrink-0 rounded-lg px-2 py-2 text-xs text-zinc-500 hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-5">
