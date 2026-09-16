@@ -16,6 +16,7 @@ const KEYS = [
   "brand_color",
   "brand_color_secondary",
   "brand_colors_extra",
+  "brand_photos",
   "brand_visual_style",
   "brand_logo",
   "brand_niche",
@@ -89,6 +90,20 @@ export async function POST(req: NextRequest) {
 
     if (typeof body.brand_logo === "string" && body.brand_logo.length > 600_000) {
       return fail(new Error("El logo es demasiado grande. Usa una imagen de menos de 400 KB."), 400);
+    }
+
+    if (typeof body.brand_photos === "string") {
+      if (body.brand_photos.length > 3_000_000) {
+        return fail(new Error("Las fotos pesan demasiado en conjunto. Usa menos fotos o más livianas."), 400);
+      }
+      try {
+        const photos = JSON.parse(body.brand_photos);
+        if (!Array.isArray(photos) || photos.length > 8) {
+          return fail(new Error("Máximo 8 fotos."), 400);
+        }
+      } catch {
+        return fail(new Error("Formato de fotos inválido."), 400);
+      }
     }
 
     // Guardado normal de ajustes

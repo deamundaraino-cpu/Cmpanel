@@ -11,6 +11,7 @@ const KEYS = [
   "brand_color",
   "brand_color_secondary",
   "brand_colors_extra",
+  "brand_photos",
   "brand_visual_style",
   "brand_logo",
   "brand_niche",
@@ -45,6 +46,11 @@ const VISUAL_STYLES = [
     label: "Bold impacto",
     hint: "Fondo negro, tu color como acento en la frase clave. Portadas con variaciones de diseño automáticas.",
   },
+  {
+    value: "foto_personal",
+    label: "Foto personal",
+    hint: "Tu foto de fondo con degradado y el titular resaltado encima. Sube fotos tuyas más abajo para activarlo.",
+  },
 ];
 
 function Field({
@@ -64,7 +70,7 @@ function Field({
   );
 }
 
-function parseExtraColors(raw: string | undefined): string[] {
+function parseJsonArray(raw: string | undefined): string[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
@@ -138,11 +144,11 @@ export default function BrandForm() {
     }
   }
 
-  const extraColors = parseExtraColors(s.brand_colors_extra);
+  const extraColors = parseJsonArray(s.brand_colors_extra);
 
   function setExtraColor(i: number, value: string) {
     setS((prev) => {
-      const arr = parseExtraColors(prev.brand_colors_extra);
+      const arr = parseJsonArray(prev.brand_colors_extra);
       arr[i] = value;
       return { ...prev, brand_colors_extra: JSON.stringify(arr) };
     });
@@ -150,7 +156,7 @@ export default function BrandForm() {
 
   function addExtraColor() {
     setS((prev) => {
-      const arr = parseExtraColors(prev.brand_colors_extra);
+      const arr = parseJsonArray(prev.brand_colors_extra);
       arr.push("#888888");
       return { ...prev, brand_colors_extra: JSON.stringify(arr) };
     });
@@ -158,10 +164,47 @@ export default function BrandForm() {
 
   function removeExtraColor(i: number) {
     setS((prev) => {
-      const arr = parseExtraColors(prev.brand_colors_extra);
+      const arr = parseJsonArray(prev.brand_colors_extra);
       arr.splice(i, 1);
       return { ...prev, brand_colors_extra: JSON.stringify(arr) };
     });
+  }
+
+  const photos = parseJsonArray(s.brand_photos);
+
+  function removePhoto(i: number) {
+    setS((prev) => {
+      const arr = parseJsonArray(prev.brand_photos);
+      arr.splice(i, 1);
+      return { ...prev, brand_photos: JSON.stringify(arr) };
+    });
+  }
+
+  function onPhotosChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const room = 8 - photos.length;
+    if (room <= 0) {
+      setMsg("⚠️ Máximo 8 fotos. Quita alguna antes de subir más.");
+      return;
+    }
+    const toAdd = files.slice(0, room);
+    if (files.some((f) => f.size > 400_000)) {
+      setMsg("⚠️ Algunas fotos pesan demasiado (máx. 400 KB c/u) y no se agregaron.");
+    }
+    toAdd
+      .filter((f) => f.size <= 400_000)
+      .forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setS((p) => ({
+            ...p,
+            brand_photos: JSON.stringify([...parseJsonArray(p.brand_photos), reader.result as string]),
+          }));
+        };
+        reader.readAsDataURL(file);
+      });
   }
 
   function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -327,6 +370,47 @@ export default function BrandForm() {
               Cuadrada, menos de 400 KB. Si no subes una, se usa un punto de tu color primario.
             </span>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-400">Fotos tuyas para portadas (opcional)</span>
+            {photos.length < 8 && (
+              <label className="cursor-pointer rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 transition hover:bg-zinc-700">
+                + Subir fotos
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  onChange={onPhotosChange}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-zinc-600">
+            Hasta 8 fotos verticales con tu rostro (menos de 400 KB c/u). El
+            estilo &quot;Foto personal&quot; las usa de fondo rotando entre ellas,
+            con tu titular resaltado encima — como una portada de carrusel real.
+          </p>
+          {photos.length > 0 && (
+            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+              {photos.map((photo, i) => (
+                <div key={i} className="group relative aspect-[4/5] overflow-hidden rounded-lg border border-zinc-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    aria-label="Quitar foto"
+                    className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-xs text-white opacity-0 transition group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-5">

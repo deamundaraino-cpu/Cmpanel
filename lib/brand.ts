@@ -50,7 +50,22 @@ export async function briefCompleteness(
   };
 }
 
-const VALID_STYLES: VisualStyle[] = ["minimal_oscuro", "editorial_claro", "bold_contraste", "bold_impacto"];
+const VALID_STYLES: VisualStyle[] = [
+  "minimal_oscuro",
+  "editorial_claro",
+  "bold_contraste",
+  "bold_impacto",
+  "foto_personal",
+];
+
+function parseJsonStringArray(raw: string | null | undefined): string[] {
+  try {
+    const arr = JSON.parse(raw || "[]");
+    return Array.isArray(arr) ? arr.filter((c) => typeof c === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /** Identidad visual lista para pasar a renderSlide(): color, estilo y logo. */
 export async function buildBrandStyle(clientId: number): Promise<BrandStyle> {
@@ -60,25 +75,20 @@ export async function buildBrandStyle(clientId: number): Promise<BrandStyle> {
     "brand_color",
     "brand_color_secondary",
     "brand_colors_extra",
+    "brand_photos",
     "brand_visual_style",
     "brand_logo",
   ]);
   const visualStyle = VALID_STYLES.includes(s.brand_visual_style as VisualStyle)
     ? (s.brand_visual_style as VisualStyle)
     : "minimal_oscuro";
-  let extra: string[] = [];
-  try {
-    const arr = JSON.parse(s.brand_colors_extra || "[]");
-    if (Array.isArray(arr)) extra = arr.filter((c) => typeof c === "string");
-  } catch {
-    extra = [];
-  }
   return {
     brandName: s.brand_name || "Tu Marca",
     brandHandle: s.brand_handle || "@tumarca",
     primary: s.brand_color || "#e8590c",
     secondary: s.brand_color_secondary || "#3987e5",
-    extra,
+    extra: parseJsonStringArray(s.brand_colors_extra),
+    photos: parseJsonStringArray(s.brand_photos),
     visualStyle,
     logo: s.brand_logo || null,
   };

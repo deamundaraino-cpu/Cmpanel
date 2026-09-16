@@ -5,7 +5,12 @@ export { parseEmphasis, stripEmphasis };
 
 export type Slide = { titulo: string; cuerpo: string };
 
-export type VisualStyle = "minimal_oscuro" | "editorial_claro" | "bold_contraste" | "bold_impacto";
+export type VisualStyle =
+  | "minimal_oscuro"
+  | "editorial_claro"
+  | "bold_contraste"
+  | "bold_impacto"
+  | "foto_personal";
 
 export type BrandStyle = {
   brandName: string;
@@ -13,6 +18,7 @@ export type BrandStyle = {
   primary: string;
   secondary: string;
   extra?: string[]; // colores adicionales de la paleta, en orden de preferencia
+  photos?: string[]; // fotos propias (data URI) para portadas con rostro real
   visualStyle: VisualStyle;
   logo?: string | null; // data URI, opcional
 };
@@ -37,6 +43,11 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
     value: "bold_impacto",
     label: "Bold impacto",
     hint: "Fondo negro, tu color como acento en la frase clave, jerarquía tipográfica marcada. Portadas con variaciones de diseño automáticas.",
+  },
+  {
+    value: "foto_personal",
+    label: "Foto personal",
+    hint: "Tu foto de fondo con degradado y el titular resaltado encima, estilo carrusel con rostro real. Sube fotos tuyas para activarlo.",
   },
 ];
 
@@ -597,6 +608,126 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
   );
 }
 
+/** Foto real de fondo (rotando entre las subidas) + degradado + titular resaltado, estilo "carrusel con rostro". */
+function renderFotoPersonal(slide: Slide, index: number, total: number, style: BrandStyle) {
+  const isCover = index === 0;
+  const isLast = index === total - 1;
+  const palette = getPalette(style);
+  const photos = style.photos && style.photos.length ? style.photos : [];
+  const photo = photos.length ? pickFromPalette(photos, slide.titulo || index, index) : null;
+  const accent = isCover ? style.primary : pickFromPalette(palette, slide.titulo || index, index);
+  const variant = isCover ? pickCoverVariant(slide.titulo) : "banda";
+  const titleSize = isCover ? 72 : 52;
+  const words = toWords(parseEmphasis(slide.titulo.toUpperCase()));
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        position: "relative",
+        fontFamily: "sans-serif",
+        background: "#111318",
+      }}
+    >
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo}
+          width={1080}
+          height={1350}
+          style={{ position: "absolute", top: 0, left: 0, width: 1080, height: 1350, objectFit: "cover", display: "flex" }}
+        />
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: 1080,
+          height: 1350,
+          display: "flex",
+          background:
+            "linear-gradient(180deg, rgba(10,10,14,0.25) 0%, rgba(10,10,14,0.05) 30%, rgba(10,10,14,0.68) 68%, rgba(10,10,14,0.94) 100%)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: 72,
+          color: "#ffffff",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              fontSize: 26,
+              fontWeight: 800,
+              color: "#ffffff",
+              background: "rgba(0,0,0,0.35)",
+              borderRadius: 999,
+              padding: "8px 18px 8px 12px",
+            }}
+          >
+            <BrandMark style={style} />
+            {style.brandName}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 24,
+              fontWeight: 800,
+              color: contrastText(accent),
+              background: accent,
+              borderRadius: 999,
+              padding: "6px 16px",
+            }}
+          >
+            {index + 1}/{total}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+          {isCover
+            ? renderCoverTitle(slide.titulo, variant, accent, titleSize)
+            : renderTitleBanda(words, accent, titleSize)}
+          {slide.cuerpo ? (
+            <div style={{ display: "flex", fontSize: 34, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>
+              {slide.cuerpo}
+            </div>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderTop: "3px solid rgba(255,255,255,0.25)",
+            paddingTop: 32,
+          }}
+        >
+          <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: style.primary }}>
+            {style.brandHandle}
+          </div>
+          <div style={{ display: "flex", fontSize: 26, color: "rgba(255,255,255,0.7)" }}>
+            {isLast ? "Guarda este post »" : "Desliza »"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Portada de video (Reels/TikTok/Shorts), formato vertical 9:16, mismo tratamiento visual que "Bold impacto". */
 export function renderVideoPortada(opts: { titulo: string; style: BrandStyle; variant?: CoverVariant }) {
   const { titulo, style } = opts;
@@ -639,14 +770,17 @@ export function renderSlide(opts: {
   style: BrandStyle;
 }) {
   const { slide, index, total, style } = opts;
+  const hasPhotos = !!style.photos?.length;
   const tree =
-    style.visualStyle === "editorial_claro"
-      ? renderEditorialClaro(slide, index, total, style)
-      : style.visualStyle === "bold_contraste"
-        ? renderBoldContraste(slide, index, total, style)
-        : style.visualStyle === "bold_impacto"
-          ? renderBoldImpacto(slide, index, total, style)
-          : renderMinimalOscuro(slide, index, total, style);
+    style.visualStyle === "foto_personal" && hasPhotos
+      ? renderFotoPersonal(slide, index, total, style)
+      : style.visualStyle === "editorial_claro"
+        ? renderEditorialClaro(slide, index, total, style)
+        : style.visualStyle === "bold_contraste"
+          ? renderBoldContraste(slide, index, total, style)
+          : style.visualStyle === "bold_impacto" || style.visualStyle === "foto_personal"
+            ? renderBoldImpacto(slide, index, total, style)
+            : renderMinimalOscuro(slide, index, total, style);
 
   return new ImageResponse(tree, { width: 1080, height: 1350 });
 }

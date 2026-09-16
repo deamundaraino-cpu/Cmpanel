@@ -32,7 +32,7 @@ export async function getSettings(
 
 // Claves por cliente:
 // ig_token, ig_token_fetched_at, ig_user_id, ig_username
-// brand_name, brand_handle, brand_color, brand_color_secondary, brand_colors_extra, brand_visual_style,
+// brand_name, brand_handle, brand_color, brand_color_secondary, brand_colors_extra, brand_photos, brand_visual_style,
 // brand_logo, brand_niche, brand_mission, brand_audience, brand_value_prop,
 // brand_tone, brand_pillars, brand_objectives, brand_avoid
 // (Las claves de IA — LLM/Tavily — viven en variables de entorno, no aquí.)
