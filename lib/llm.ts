@@ -1,7 +1,14 @@
 import { jsonrepair } from "jsonrepair";
 import { getAppSettings } from "./appSettings";
 
-export class LlmError extends Error {}
+export class LlmError extends Error {
+  transient: boolean;
+  constructor(message: string, transient = false) {
+    super(message);
+    this.name = "LlmError";
+    this.transient = transient;
+  }
+}
 
 export const PROVIDERS: Record<string, { baseUrl: string; model: string; label: string }> = {
   groq: {
@@ -11,7 +18,7 @@ export const PROVIDERS: Record<string, { baseUrl: string; model: string; label: 
   },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "meta-llama/llama-3.3-70b-instruct:free",
+    model: "nvidia/nemotron-3-super-120b-a12b:free",
     label: "OpenRouter (modelos :free)",
   },
   gemini: {
@@ -45,16 +52,37 @@ export async function getLlmConfig() {
   return { provider, baseUrl, model, apiKey, source };
 }
 
-export async function chat(system: string, user: string): Promise<string> {
-  const { baseUrl, model, apiKey } = await getLlmConfig();
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+type ProviderCall = { provider: string; baseUrl: string; model: string; apiKey: string };
+
+// Respaldo si el proveedor principal falla por saturación (503/429): OpenRouter
+// con un modelo :free. Sin llave configurada, simplemente no hay respaldo.
+async function getFallbackLlmConfig(): Promise<ProviderCall | null> {
+  let db: Record<string, string | null> = {};
+  try {
+    db = await getAppSettings(["llm_fallback_api_key", "llm_fallback_model", "llm_fallback_base_url"]);
+  } catch {
+    // Tabla app_settings aún no creada: solo env vars.
+  }
+  const apiKey = db.llm_fallback_api_key || process.env.OPENROUTER_API_KEY || "";
+  if (!apiKey) return null;
+  const preset = PROVIDERS.openrouter;
+  return {
+    provider: "openrouter",
+    baseUrl: db.llm_fallback_base_url || preset.baseUrl,
+    model: db.llm_fallback_model || preset.model,
+    apiKey,
+  };
+}
+
+async function callProvider(cfg: ProviderCall, system: string, user: string): Promise<string> {
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${cfg.apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: cfg.model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -64,13 +92,30 @@ export async function chat(system: string, user: string): Promise<string> {
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new LlmError(
-      json?.error?.message || `Error del proveedor de IA (${res.status})`
-    );
+    const transient = res.status === 503 || res.status === 429;
+    throw new LlmError(json?.error?.message || `Error del proveedor de IA (${res.status})`, transient);
   }
   const content = json?.choices?.[0]?.message?.content;
   if (!content) throw new LlmError("El proveedor de IA no devolvió contenido.");
   return content;
+}
+
+export async function chat(system: string, user: string): Promise<string> {
+  const primary = await getLlmConfig();
+  try {
+    return await callProvider(primary, system, user);
+  } catch (e) {
+    // Solo saltamos a OpenRouter si el fallo es transitorio (saturación/rate
+    // limit) del proveedor principal, no ante errores de configuración o de
+    // contenido — esos son iguales en cualquier proveedor.
+    if (e instanceof LlmError && e.transient) {
+      const fallback = await getFallbackLlmConfig();
+      if (fallback && fallback.provider !== primary.provider) {
+        return await callProvider(fallback, system, user);
+      }
+    }
+    throw e;
+  }
 }
 
 /** Pide una respuesta JSON y la parsea con tolerancia a texto extra. */
