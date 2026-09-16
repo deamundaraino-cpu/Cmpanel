@@ -38,7 +38,7 @@ export async function GET(
     }
 
     const slides = JSON.parse(proposal.slides) as Slide[];
-    const style = await buildBrandStyle(clientId);
+    const style = await buildBrandStyle(clientId, { coverSeed: slides[0]?.titulo || "" });
 
     const zip = new JSZip();
     for (let i = 0; i < slides.length; i++) {

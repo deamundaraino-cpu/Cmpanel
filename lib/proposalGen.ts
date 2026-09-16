@@ -1,11 +1,30 @@
 export type QualityGen = { score: number; razon: string };
 
 export type CarouselGen = {
-  slides: { titulo: string; cuerpo: string }[];
+  slides: { titulo: string; cuerpo: string; layout?: string }[];
   caption: string;
   hashtags: string[];
   calidad?: QualityGen;
+  portada_layout?: string;
 };
+
+const COVER_LAYOUT_VALUES = ["split", "texto_detras", "numero"];
+
+/** Pide a la IA la composición de portada (solo se usa con el estilo "Con tu foto"). */
+export const COVER_LAYOUT_INSTRUCTION = `Elige además la composición visual de la PORTADA como "portada_layout", una de:
+- "numero": SOLO si el titulo de la portada empieza con un número (ej: "3 errores que…"). El número se muestra gigante.
+- "texto_detras": si la frase clave entre ** es 1-2 palabras cortas y potentes (máx 12 letras). Esa palabra va gigante detrás de la persona.
+- "split": para ganchos más largos, preguntas o frases de autoridad. Titular en un bloque de color junto a la persona.
+Varía la elección entre carruseles cuando el gancho lo permita.`;
+
+/** Guarda la composición elegida en la portada; si la IA no eligió una válida, el render decide por el título. */
+export function applyCoverLayout(gen: CarouselGen): CarouselGen["slides"] {
+  const slides = gen.slides.map(({ titulo, cuerpo }) => ({ titulo, cuerpo }));
+  if (slides[0] && COVER_LAYOUT_VALUES.includes(gen.portada_layout || "")) {
+    return [{ ...slides[0], layout: gen.portada_layout }, ...slides.slice(1)];
+  }
+  return slides;
+}
 
 export type ScriptGen = {
   beats: { seccion: string; texto: string; edicion?: string }[];

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import BrandPhotos from "./BrandPhotos";
 
 type Settings = Record<string, string>;
 
@@ -11,7 +12,6 @@ const KEYS = [
   "brand_color",
   "brand_color_secondary",
   "brand_colors_extra",
-  "brand_photos",
   "brand_visual_style",
   "brand_logo",
   "brand_niche",
@@ -27,30 +27,31 @@ const KEYS = [
 
 const VISUAL_STYLES = [
   {
-    value: "minimal_oscuro",
-    label: "Minimal oscuro",
-    hint: "Fondo oscuro, texto claro, tu color como acento. Discreto y profesional.",
+    value: "foto_personal",
+    label: "Con tu foto",
+    hint: "Portadas compuestas con tu figura recortada. La IA elige la composición de cada carrusel.",
+  },
+  {
+    value: "bold_impacto",
+    label: "Negro + acento",
+    hint: "Fondo negro, titular en mayúsculas y la frase clave en tu color más vivo.",
+  },
+  {
+    value: "bold_contraste",
+    label: "Bloque de color",
+    hint: "Fondo a todo color con tu paleta y texto con contraste automático. Ideal para hooks.",
   },
   {
     value: "editorial_claro",
     label: "Editorial claro",
-    hint: "Fondo claro, texto oscuro, barra de color como firma. Look de revista.",
+    hint: "Fondo claro, texto oscuro y barra de color como firma. Look de revista.",
   },
-  {
-    value: "bold_contraste",
-    label: "Bold contraste",
-    hint: "Fondo a todo color con tu paleta, texto grande adaptado al contraste. Máximo impacto para hooks.",
-  },
-  {
-    value: "bold_impacto",
-    label: "Bold impacto",
-    hint: "Fondo negro, tu color como acento en la frase clave. Portadas con variaciones de diseño automáticas.",
-  },
-  {
-    value: "foto_personal",
-    label: "Foto personal",
-    hint: "Tu foto de fondo con degradado y el titular resaltado encima. Sube fotos tuyas más abajo para activarlo.",
-  },
+];
+
+const COVER_LAYOUTS = [
+  { value: "split", label: "Split" },
+  { value: "texto_detras", label: "Texto detrás" },
+  { value: "numero", label: "Número protagonista" },
 ];
 
 function Field({
@@ -104,7 +105,6 @@ export default function BrandForm() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(0);
-  const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -168,53 +168,6 @@ export default function BrandForm() {
       const arr = parseJsonArray(prev.brand_colors_extra);
       arr.splice(i, 1);
       return { ...prev, brand_colors_extra: JSON.stringify(arr) };
-    });
-  }
-
-  const photos = parseJsonArray(s.brand_photos);
-
-  function removePhoto(i: number) {
-    setS((prev) => {
-      const arr = parseJsonArray(prev.brand_photos);
-      arr.splice(i, 1);
-      return { ...prev, brand_photos: JSON.stringify(arr) };
-    });
-  }
-
-  function onPhotosChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (!files.length) return;
-    const room = 8 - photos.length;
-    if (room <= 0) {
-      setMsg("⚠️ Máximo 8 fotos. Quita alguna antes de subir más.");
-      return;
-    }
-    const toAdd = files.slice(0, room);
-    if (files.some((f) => f.size > 400_000)) {
-      setMsg("⚠️ Algunas fotos pesan demasiado (máx. 400 KB c/u) y no se agregaron.");
-    }
-    const valid = toAdd.filter((f) => f.size <= 400_000);
-    if (!valid.length) return;
-    setUploadingPhotos((n) => n + valid.length);
-    valid.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setS((p) => ({
-          ...p,
-          brand_photos: JSON.stringify([...parseJsonArray(p.brand_photos), reader.result as string]),
-        }));
-        setUploadingPhotos((n) => {
-          const next = n - 1;
-          if (next === 0) setMsg("✓ Foto(s) cargada(s) abajo. No olvides \"Guardar ficha de marca\" para que se apliquen.");
-          return next;
-        });
-      };
-      reader.onerror = () => {
-        setUploadingPhotos((n) => n - 1);
-        setMsg("⚠️ No se pudo leer una de las fotos.");
-      };
-      reader.readAsDataURL(file);
     });
   }
 
@@ -383,75 +336,29 @@ export default function BrandForm() {
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Fotos tuyas para portadas (opcional)</span>
-            <div className="flex items-center gap-2">
-              {uploadingPhotos > 0 && (
-                <span className="text-xs text-zinc-500">Cargando {uploadingPhotos}…</span>
-              )}
-              {photos.length < 8 && (
-                <label className="cursor-pointer rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 transition hover:bg-zinc-700">
-                  + Subir fotos
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    onChange={onPhotosChange}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-          <p className="mt-1 text-xs text-zinc-600">
-            Hasta 8 fotos verticales con tu rostro (menos de 400 KB c/u). El
-            estilo &quot;Foto personal&quot; las usa de fondo rotando entre ellas,
-            con tu titular resaltado encima — como una portada de carrusel real.
-          </p>
-          {photos.length > 0 && (
-            <>
-              <p className="mt-2 text-[11px] text-emerald-400">{photos.length}/8 fotos cargadas ✓</p>
-              <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-                {photos.map((photo, i) => (
-                  <div key={i} className="group relative aspect-[4/5] overflow-hidden rounded-lg border border-zinc-700">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(i)}
-                      aria-label="Quitar foto"
-                      className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-xs text-white opacity-0 transition group-hover:opacity-100"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <BrandPhotos onChanged={() => setPreviewVersion((v) => v + 1)} />
 
         <div className="mt-5">
           <span className="text-xs font-medium text-zinc-400">Estilo de diseño</span>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {VISUAL_STYLES.map((style) => {
-              const active = (s.brand_visual_style || "minimal_oscuro") === style.value;
+              const current = VISUAL_STYLES.some((v) => v.value === s.brand_visual_style)
+                ? s.brand_visual_style
+                : "bold_impacto";
+              const active = current === style.value;
               return (
                 <button
                   key={style.value}
                   onClick={() => setS((prev) => ({ ...prev, brand_visual_style: style.value }))}
                   className={`overflow-hidden rounded-lg border text-left transition ${
-                    active
-                      ? "border-indigo-500 ring-1 ring-indigo-500"
-                      : "border-zinc-700 hover:border-zinc-600"
+                    active ? "border-indigo-500 ring-1 ring-indigo-500" : "border-zinc-700 hover:border-zinc-600"
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api/brand-preview?style=${style.value}&v=${previewVersion}`}
                     alt={style.label}
-                    className="h-32 w-full object-cover"
+                    className="aspect-[4/5] w-full object-cover"
                   />
                   <div className="p-2.5">
                     <p className="text-xs font-semibold text-zinc-200">{style.label}</p>
@@ -465,6 +372,29 @@ export default function BrandForm() {
             Las miniaturas usan tus colores guardados — guarda primero si acabas de cambiarlos.
           </p>
         </div>
+
+        {s.brand_visual_style === "foto_personal" && (
+          <div className="mt-5">
+            <span className="text-xs font-medium text-zinc-400">Composiciones de portada con tu foto</span>
+            <p className="mt-1 text-xs text-zinc-600">
+              Al generar cada carrusel, la IA elige la que mejor encaja con el gancho (los títulos que empiezan con
+              número usan &quot;Número protagonista&quot;). Necesitan al menos una foto recortada.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-3">
+              {COVER_LAYOUTS.map((layout) => (
+                <div key={layout.value} className="overflow-hidden rounded-lg border border-zinc-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/brand-preview?style=foto_personal&layout=${layout.value}&v=${previewVersion}`}
+                    alt={layout.label}
+                    className="aspect-[4/5] w-full object-cover"
+                  />
+                  <p className="p-2 text-xs font-semibold text-zinc-200">{layout.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">

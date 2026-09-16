@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const variantParam = req.nextUrl.searchParams.get("variant") as CoverVariant | null;
   const variant = COVER_VARIANTS.some((v) => v.value === variantParam) ? (variantParam as CoverVariant) : undefined;
 
-  const style = await buildBrandStyle(proposal.client_id);
+  const style = await buildBrandStyle(proposal.client_id, { needCover: false, needAvatar: false });
   style.visualStyle = "bold_impacto";
 
   return renderVideoPortada({ titulo, style, variant });

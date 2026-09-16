@@ -38,6 +38,10 @@ export async function GET(req: NextRequest) {
     slide: slides[index],
     index,
     total: slides.length,
-    style: await buildBrandStyle(proposal.client_id),
+    style: await buildBrandStyle(proposal.client_id, {
+      coverSeed: slides[0].titulo,
+      needCover: index === 0,
+      needAvatar: index !== 0,
+    }),
   });
 }

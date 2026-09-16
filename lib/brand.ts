@@ -1,5 +1,6 @@
 import { getSettings } from "./settings";
 import { BrandStyle, VisualStyle } from "./slide";
+import { chooseCoverPhoto, listPhotoMeta, loadPhoto } from "./brandPhotos";
 
 const BRIEF_KEYS = [
   "brand_name",
@@ -50,13 +51,7 @@ export async function briefCompleteness(
   };
 }
 
-const VALID_STYLES: VisualStyle[] = [
-  "minimal_oscuro",
-  "editorial_claro",
-  "bold_contraste",
-  "bold_impacto",
-  "foto_personal",
-];
+const VALID_STYLES: VisualStyle[] = ["editorial_claro", "bold_contraste", "bold_impacto", "foto_personal"];
 
 function parseJsonStringArray(raw: string | null | undefined): string[] {
   try {
@@ -67,29 +62,50 @@ function parseJsonStringArray(raw: string | null | undefined): string[] {
   }
 }
 
-/** Identidad visual lista para pasar a renderSlide(): color, estilo y logo. */
-export async function buildBrandStyle(clientId: number): Promise<BrandStyle> {
+/**
+ * Identidad visual lista para pasar a renderSlide(): color, estilo, logo y fotos.
+ * Las fotos solo se cargan con el estilo "Con tu foto" (o si se fuerzan), y solo
+ * las necesarias: la portada se elige por `coverSeed` (el título de portada).
+ */
+export async function buildBrandStyle(
+  clientId: number,
+  opts: { coverSeed?: string; needCover?: boolean; needAvatar?: boolean; forcePhotos?: boolean } = {}
+): Promise<BrandStyle> {
   const s = await getSettings(clientId, [
     "brand_name",
     "brand_handle",
     "brand_color",
     "brand_color_secondary",
     "brand_colors_extra",
-    "brand_photos",
     "brand_visual_style",
     "brand_logo",
   ]);
+  // "minimal_oscuro" ya no existe: quien lo tenía pasa a "Negro + acento".
   const visualStyle = VALID_STYLES.includes(s.brand_visual_style as VisualStyle)
     ? (s.brand_visual_style as VisualStyle)
-    : "minimal_oscuro";
+    : "bold_impacto";
   return {
     brandName: s.brand_name || "Tu Marca",
     brandHandle: s.brand_handle || "@tumarca",
     primary: s.brand_color || "#e8590c",
     secondary: s.brand_color_secondary || "#3987e5",
     extra: parseJsonStringArray(s.brand_colors_extra),
-    photos: parseJsonStringArray(s.brand_photos),
     visualStyle,
     logo: s.brand_logo || null,
+    ...(visualStyle === "foto_personal" || opts.forcePhotos ? await loadStylePhotos(clientId, opts) : {}),
   };
+}
+
+async function loadStylePhotos(
+  clientId: number,
+  { coverSeed = "", needCover = true, needAvatar = true }: { coverSeed?: string; needCover?: boolean; needAvatar?: boolean }
+): Promise<Pick<BrandStyle, "coverPhoto" | "avatar">> {
+  const meta = await listPhotoMeta(clientId);
+  if (!meta.length) return {};
+  const chosen = needCover ? chooseCoverPhoto(meta, coverSeed) : null;
+  const [coverPhoto, avatarPhoto] = await Promise.all([
+    chosen ? loadPhoto(clientId, chosen.id) : null,
+    needAvatar ? loadPhoto(clientId, meta[0].id) : null,
+  ]);
+  return { coverPhoto, avatar: avatarPhoto?.src || null };
 }
