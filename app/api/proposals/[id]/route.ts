@@ -12,6 +12,8 @@ import {
   clampQuality,
   applyCoverLayout,
   COVER_LAYOUT_INSTRUCTION,
+  applyCoverTexts,
+  COVER_TEXTS_INSTRUCTION,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { ensurePipelineItem } from "@/lib/pipeline";
@@ -81,13 +83,13 @@ export async function PATCH(
         }
         const gen = await chatJson<ScriptGen>(
           `Eres un guionista experto en video corto. Revisas guiones aplicando el feedback del creador SIN perder lo que ya funciona. Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}`,
-          `Guion actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la PRIMERA sección (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "...", "texto": "...", "edicion": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}}\n${QUALITY_BAR}`
+          `Guion actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la PRIMERA sección (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "...", "texto": "...", "edicion": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
         );
         if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion revisado"), 500);
         const q = clampQuality(gen.calidad);
         await sql`
           UPDATE proposals SET
-            slides = ${JSON.stringify(gen.beats)},
+            slides = ${JSON.stringify(applyCoverTexts(gen))},
             caption = ${gen.caption || proposal.caption || ""},
             hashtags = ${JSON.stringify(gen.hashtags || [])},
             quality = ${q.score},

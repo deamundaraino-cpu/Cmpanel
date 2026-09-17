@@ -6,7 +6,7 @@ import { parseEmphasis, stripEmphasis } from "./emphasis";
 type FontDef = { name: string; data: Buffer; weight: 400 | 500 | 800 | 900; style: "normal" };
 let fontCache: FontDef[] | null = null;
 
-function fonts(): FontDef[] {
+export function fonts(): FontDef[] {
   if (!fontCache) {
     const f = (file: string) => readFileSync(join(process.cwd(), "assets/fonts", file));
     fontCache = [
@@ -19,7 +19,7 @@ function fonts(): FontDef[] {
   return fontCache;
 }
 
-const DISPLAY = "Anton";
+export const DISPLAY = "Anton";
 
 export { parseEmphasis, stripEmphasis };
 
@@ -76,13 +76,13 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
 const W = 1080;
 const H = 1350;
 
-function hashString(text: string): number {
+export function hashString(text: string): number {
   let h = 0;
   for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
   return h;
 }
 
-function clamp(n: number, min: number, max: number): number {
+export function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
@@ -131,19 +131,19 @@ function hue(hex: string): number {
   return (h * 60 + 360) % 360;
 }
 
-function mix(hex: string, target: string, amount: number): string {
+export function mix(hex: string, target: string, amount: number): string {
   const a = rgb(hex);
   const b = rgb(target);
   return toHex([0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * amount) as [number, number, number]);
 }
 
-function alpha(hex: string, a: number): string {
+export function alpha(hex: string, a: number): string {
   const [r, g, b] = rgb(hex);
   return `rgba(${r},${g},${b},${a})`;
 }
 
 /** Blanco o negro, el que más contraste tenga sobre el color dado. */
-function contrastText(hex: string): string {
+export function contrastText(hex: string): string {
   return contrast(hex, "#ffffff") >= contrast(hex, "#0a0a0a") ? "#ffffff" : "#0a0a0a";
 }
 
@@ -161,7 +161,7 @@ function getPalette(style: BrandStyle): string[] {
   return out.length ? out : ["#e8590c"];
 }
 
-type Theme = { dark: string; light: string; accent: string; accent2: string; vivid: string[] };
+export type Theme = { dark: string; light: string; accent: string; accent2: string; vivid: string[] };
 
 /**
  * Interpreta la paleta por su función, no por su orden: el primario de una
@@ -169,7 +169,7 @@ type Theme = { dark: string; light: string; accent: string; accent2: string; viv
  * invisible. Oscuro/claro salen de la luminancia; los acentos, de los colores
  * saturados que contrastan con el fondo oscuro.
  */
-function resolveTheme(style: BrandStyle): Theme {
+export function resolveTheme(style: BrandStyle): Theme {
   const palette = getPalette(style);
   const byLum = [...palette].sort((a, b) => relLum(a) - relLum(b));
   const dark = relLum(byLum[0]) < 0.03 ? byLum[0] : "#0b0b0f";
@@ -280,14 +280,7 @@ function titleSize(text: string, base: number, min: number, max: number): number
   return Math.round(clamp(base * Math.sqrt(30 / len), min, max));
 }
 
-export type CoverVariant = "banda" | "insignia" | "subrayado" | "cita";
-
-export const COVER_VARIANTS: { value: CoverVariant; label: string }[] = [
-  { value: "banda", label: "Banda" },
-  { value: "insignia", label: "Insignia" },
-  { value: "subrayado", label: "Subrayado" },
-  { value: "cita", label: "Cita" },
-];
+type CoverVariant = "banda" | "insignia" | "subrayado" | "cita";
 
 /** Elige un tratamiento de portada distinto según el contenido, para que los carruseles no se vean repetitivos. */
 function pickCoverVariant(titulo: string): CoverVariant {
@@ -669,7 +662,7 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
 
 type Figure = { photo: BrandPhoto; cutout: Cutout };
 
-function figureBox(c: Cutout, maxH: number, maxW: number): { w: number; h: number } {
+export function figureBox(c: Cutout, maxH: number, maxW: number): { w: number; h: number } {
   let h = maxH;
   let w = Math.round((h * c.w) / c.h);
   if (w > maxW) {
@@ -987,42 +980,6 @@ function renderFotoPersonal(slide: Slide, index: number, total: number, style: B
   if (layout === "numero") return coverNumero(slide, total, style, theme, fig);
   if (layout === "texto_detras") return coverTextoDetras(slide, total, style, theme, fig);
   return coverSplit(slide, total, style, theme, fig);
-}
-
-/** Portada de video (Reels/TikTok/Shorts), formato vertical 9:16, mismo tratamiento visual que "Negro + acento". */
-export function renderVideoPortada(opts: { titulo: string; style: BrandStyle; variant?: CoverVariant }) {
-  const { titulo, style } = opts;
-  const theme = resolveTheme(style);
-  const accent = theme.accent;
-  const variant =
-    opts.variant && COVER_VARIANTS.some((v) => v.value === opts.variant) ? opts.variant : pickCoverVariant(titulo);
-
-  const tree = (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: 80,
-        background: theme.dark,
-        color: "#ffffff",
-        fontFamily: "Inter",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 30, fontWeight: 800 }}>
-        <BrandMark style={style} color={accent} size={22} />
-        {style.brandName}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column" }}>{renderCoverTitle(titulo, variant, accent, 92)}</div>
-
-      <div style={{ display: "flex", fontSize: 34, fontWeight: 800, color: accent }}>{style.brandHandle}</div>
-    </div>
-  );
-
-  return new ImageResponse(tree, { width: 1080, height: 1920, fonts: fonts() });
 }
 
 export function renderSlide(opts: { slide: Slide; index: number; total: number; style: BrandStyle }) {

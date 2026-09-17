@@ -11,6 +11,8 @@ import {
   clampQuality,
   applyCoverLayout,
   COVER_LAYOUT_INSTRUCTION,
+  applyCoverTexts,
+  COVER_TEXTS_INSTRUCTION,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { toPilar } from "@/lib/pilares";
@@ -125,7 +127,7 @@ export async function POST(req: NextRequest) {
 
     const gen = await chatJson<ScriptGen>(
       `Eres un guionista experto en contenido de video corto (Reels, TikTok, Shorts) que domina estructuras probadas de retención y trabaja mano a mano con editores de video. Escribes en español, en el tono de voz de la marca, pensando en su cliente ideal. Escribes el texto EXACTO que la persona debe decir a cámara en cada sección (no descripciones ni instrucciones, el guion real hablado).\n\nFicha de marca:\n${brief}`,
-      `${source.context}\n\nEscribe un guion de video siguiendo EXACTAMENTE esta estructura, en este orden, respetando la intención de cada sección:\n${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la sección "${beatNames[0]}" (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "${beatNames[0]}", "texto": "guion hablado de esta sección", "edicion": "indicaciones de edición de esta sección"}, ...], "caption": "descripción/copy corto para acompañar el video al publicarlo", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}}\nUsa exactamente estos nombres de sección en el mismo orden: ${beatNames.join(", ")}. 10-15 hashtags.\n${QUALITY_BAR}`
+      `${source.context}\n\nEscribe un guion de video siguiendo EXACTAMENTE esta estructura, en este orden, respetando la intención de cada sección:\n${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la sección "${beatNames[0]}" (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "${beatNames[0]}", "texto": "guion hablado de esta sección", "edicion": "indicaciones de edición de esta sección"}, ...], "caption": "descripción/copy corto para acompañar el video al publicarlo", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\nUsa exactamente estos nombres de sección en el mismo orden: ${beatNames.join(", ")}. 10-15 hashtags.\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
     );
     if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion"), 500);
     const q = clampQuality(gen.calidad);
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
     const [row] = await sql<{ id: number }[]>`
       INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
       VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
-        ${JSON.stringify(gen.beats)}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
+        ${JSON.stringify(applyCoverTexts(gen))}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
         ${structure.id}, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
       RETURNING id
     `;

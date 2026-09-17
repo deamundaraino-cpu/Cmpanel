@@ -3,16 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { stripEmphasis } from "@/lib/emphasis";
+import ReelCoverPicker from "./ReelCoverPicker";
 
 type Slide = { titulo: string; cuerpo: string };
-type Beat = { seccion: string; texto: string; edicion?: string };
-
-const COVER_VARIANTS: { value: string; label: string }[] = [
-  { value: "banda", label: "Banda" },
-  { value: "insignia", label: "Insignia" },
-  { value: "subrayado", label: "Subrayado" },
-  { value: "cita", label: "Cita" },
-];
+type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
 
 export default function ProposalCard({
   id,
@@ -295,28 +289,7 @@ export default function ProposalCard({
             </div>
           ))}
 
-          <div className="mt-1.5">
-            <p className="text-xs font-medium text-zinc-400">🖼️ Portada del video · elige un estilo</p>
-            <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
-              {COVER_VARIANTS.map((v) => (
-                <a
-                  key={v.value}
-                  href={`/api/proposals/${id}/portada?variant=${v.value}`}
-                  download={`portada-${id}-${v.value}.png`}
-                  className="shrink-0 text-center"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/proposals/${id}/portada?variant=${v.value}`}
-                    alt={`Portada ${v.label}`}
-                    className="h-52 w-auto rounded-lg border border-zinc-800 transition hover:border-indigo-500"
-                    loading="lazy"
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-500">{v.label}</p>
-                </a>
-              ))}
-            </div>
-          </div>
+          <ReelCoverPicker id={id} initialTexts={beats[0]?.portadas || []} />
         </div>
       ) : (
         <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
