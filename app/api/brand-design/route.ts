@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
 import { setSetting } from "@/lib/settings";
 import { buildBrandBrief, getBrandDesign } from "@/lib/brand";
-import { DESIGN_INSTRUCTION, validateDesign } from "@/lib/brandDesign";
+import { capProposedDesign, DESIGN_INSTRUCTION, validateDesign } from "@/lib/brandDesign";
 import { chatJson } from "@/lib/llm";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 
@@ -27,7 +27,7 @@ export async function POST() {
       DESIGN_INSTRUCTION,
       `Ficha de marca:\n${brief}\n\nElige el esquema visual de ESTA marca.`
     );
-    const design = validateDesign(gen);
+    const design = capProposedDesign(validateDesign(gen));
     await setSetting(auth.clientId, "brand_design", JSON.stringify(design));
     await setSetting(auth.clientId, "brand_visual_style", design.visualStyle);
     return NextResponse.json({ ok: true, design });

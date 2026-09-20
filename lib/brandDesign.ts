@@ -299,11 +299,23 @@ export function validateDesign(raw: unknown): BrandDesign {
     align: pick(d.align, DESIGN_OPTIONS.align, DEFAULT_DESIGN.align),
     tilt,
     visualStyle: pick(d.visualStyle, VISUAL_STYLES.map((v) => v.value), DEFAULT_DESIGN.visualStyle),
-    // Se respeta lo elegido (hasta un tope, para que no se ofrezcan todas);
-    // si no hay selección válida, se deduce del resto del esquema.
-    reelTemplates: templates.length >= 3 ? templates.slice(0, 5) : inferredReelTemplates(tilt, loud),
-    coverLayouts: covers.length >= 2 ? covers.slice(0, 6) : inferredCoverLayouts(loud),
+    // Se respeta lo elegido a mano, sin tope: si no hay selección válida, se
+    // deduce del resto del esquema (el tope solo aplica a lo que propone la IA).
+    reelTemplates: templates.length >= 3 ? templates : inferredReelTemplates(tilt, loud),
+    coverLayouts: covers.length >= 2 ? covers : inferredCoverLayouts(loud),
     notes: typeof d.notes === "string" ? d.notes.slice(0, 300) : undefined,
+  };
+}
+
+/**
+ * La propuesta de la IA se queda en una selección, no en el catálogo entero:
+ * una marca con todo activo vuelve a verse igual que las demás.
+ */
+export function capProposedDesign(design: BrandDesign): BrandDesign {
+  return {
+    ...design,
+    reelTemplates: design.reelTemplates.slice(0, 5),
+    coverLayouts: design.coverLayouts.slice(0, 6),
   };
 }
 

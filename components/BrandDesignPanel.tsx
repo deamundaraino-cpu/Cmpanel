@@ -44,7 +44,10 @@ export default function BrandDesignPanel({ onChanged }: { onChanged: () => void 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error");
+      // Lo que vale es lo que quedó guardado, no lo que se pulsó.
+      if (json.design) setDesign(json.design);
       setNotice(null);
       onChanged();
     } catch (e) {
