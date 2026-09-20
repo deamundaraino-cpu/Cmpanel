@@ -215,6 +215,25 @@ export const DESIGN_LABELS: Record<string, Record<string, string>> = {
   align: { left: "Izquierda", center: "Centrado" },
 };
 
+/**
+ * Si la IA no devolvió listas válidas, no se activan todas: se deduce un juego
+ * coherente con el resto del esquema (una marca sin elementos girados no
+ * estrena cintas ni círculos; una sobria no estrena composiciones de ataque).
+ */
+function inferredReelTemplates(tilt: boolean): ReelTemplate[] {
+  return REEL_TEMPLATES.filter((t) => tilt || !t.tilted)
+    .map((t) => t.value)
+    .slice(0, 5);
+}
+
+function inferredCoverLayouts(loud: boolean): CoverLayout[] {
+  const wanted = loud
+    ? ["impacto", "editorial", "corporativo"]
+    : ["elegante", "editorial", "corporativo"];
+  const pool = COVER_LAYOUTS.filter((l) => wanted.includes(l.vibe));
+  return (pool.length >= 4 ? pool : COVER_LAYOUTS).slice(0, 6).map((l) => l.value);
+}
+
 function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
@@ -228,18 +247,23 @@ export function validateDesign(raw: unknown): BrandDesign {
   const covers = Array.isArray(d.coverLayouts)
     ? d.coverLayouts.filter((l): l is CoverLayout => COVER_LAYOUTS.some((c) => c.value === l))
     : [];
+  const tilt = typeof d.tilt === "boolean" ? d.tilt : DEFAULT_DESIGN.tilt;
+  const textCase = pick(d.textCase, DESIGN_OPTIONS.textCase, DEFAULT_DESIGN.textCase);
+  const emphasis = pick(d.emphasis, DESIGN_OPTIONS.emphasis, DEFAULT_DESIGN.emphasis);
+  const loud = tilt || (textCase === "upper" && emphasis === "box");
   return {
     fontPair: pick(d.fontPair, DESIGN_OPTIONS.fontPair, DEFAULT_DESIGN.fontPair),
-    textCase: pick(d.textCase, DESIGN_OPTIONS.textCase, DEFAULT_DESIGN.textCase),
-    emphasis: pick(d.emphasis, DESIGN_OPTIONS.emphasis, DEFAULT_DESIGN.emphasis),
+    textCase,
+    emphasis,
     shape: pick(d.shape, DESIGN_OPTIONS.shape, DEFAULT_DESIGN.shape),
     background: pick(d.background, DESIGN_OPTIONS.background, DEFAULT_DESIGN.background),
     align: pick(d.align, DESIGN_OPTIONS.align, DEFAULT_DESIGN.align),
-    tilt: typeof d.tilt === "boolean" ? d.tilt : DEFAULT_DESIGN.tilt,
+    tilt,
     visualStyle: pick(d.visualStyle, VISUAL_STYLES.map((v) => v.value), DEFAULT_DESIGN.visualStyle),
-    // Sin selección válida se mantienen todas: mejor variedad que una lista vacía.
-    reelTemplates: templates.length >= 3 ? templates : DEFAULT_DESIGN.reelTemplates,
-    coverLayouts: covers.length >= 2 ? covers : DEFAULT_DESIGN.coverLayouts,
+    // Se respeta lo elegido (hasta un tope, para que no se ofrezcan todas);
+    // si no hay selección válida, se deduce del resto del esquema.
+    reelTemplates: templates.length >= 3 ? templates.slice(0, 5) : inferredReelTemplates(tilt),
+    coverLayouts: covers.length >= 2 ? covers.slice(0, 6) : inferredCoverLayouts(loud),
     notes: typeof d.notes === "string" ? d.notes.slice(0, 300) : undefined,
   };
 }
@@ -268,8 +292,8 @@ export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha d
 - align: "left" (editorial, lectura pausada) o "center" (impacto, redes).
 - tilt: true solo si a la marca le encaja lo desenfadado (elementos girados, cintas); false para marcas serias.
 - visualStyle, el estilo base del carrusel: "foto_personal" (portadas con la figura recortada), "bold_impacto" (fondo oscuro), "bold_contraste" (bloque de color), "editorial_claro" (fondo claro tipo revista).
-- reelTemplates: entre 4 y 7 de estas, ordenadas de más a menos propia de la marca: ${REEL_TEMPLATES.map((t) => `"${t.value}" (${t.hint})`).join(", ")}. Si tilt es false, no incluyas "circulo" ni "cintas" entre las primeras.
-- coverLayouts: entre 3 y 6 composiciones de portada de carrusel, de más a menos propia de la marca: ${COVER_LAYOUTS.map((l) => `"${l.value}" (${l.vibe}: ${l.hint})`).join(", ")}. Mezcla registros: para marcas sobrias prioriza las elegantes, editoriales o corporativas; para marcas de ataque, las de impacto.
+- reelTemplates: EXACTAMENTE entre 4 y 5 de estas, ordenadas de más a menos propia de la marca: ${REEL_TEMPLATES.map((t) => `"${t.value}" (${t.hint})`).join(", ")}. Si tilt es false, no incluyas "circulo" ni "cintas" entre las primeras.
+- coverLayouts: EXACTAMENTE entre 4 y 6 composiciones de portada de carrusel, de más a menos propia de la marca: ${COVER_LAYOUTS.map((l) => `"${l.value}" (${l.vibe}: ${l.hint})`).join(", ")}. Mezcla registros: para marcas sobrias prioriza las elegantes, editoriales o corporativas; para marcas de ataque, las de impacto.
 - notes: una frase explicando la decisión, en español.
 
 Decide por el sector, el tono de voz y el cliente ideal: un asesor tributario no debe verse como un infoproductor de anuncios. Evita el default ruidoso si la marca es sobria.`;
