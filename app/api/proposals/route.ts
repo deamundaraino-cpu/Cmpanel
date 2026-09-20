@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
 import { getSql, PostRow, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
-import { buildBrandBrief } from "@/lib/brand";
+import { buildBrandBrief, getBrandDesign } from "@/lib/brand";
+import { brandCoverLayouts } from "@/lib/brandDesign";
 import {
   CarouselGen,
   ScriptGen,
@@ -10,7 +11,7 @@ import {
   EDIT_NOTES_INSTRUCTION,
   clampQuality,
   applyCoverLayout,
-  COVER_LAYOUT_INSTRUCTION,
+  coverLayoutInstruction,
   applyCoverTexts,
   COVER_TEXTS_INSTRUCTION,
 } from "@/lib/proposalGen";
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
     }
     if (!pilarRef) pilarRef = toPilar(pilar);
     const brief = await buildBrandBrief(clientId);
+    const coverLayouts = brandCoverLayouts(await getBrandDesign(clientId));
     const kind = formato === "guion_video" ? "guion_video" : "carrusel";
 
     let source: { context: string; sourcePostId: string | null };
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (kind === "carrusel") {
       const gen = await chatJson<CarouselGen>(
         `Eres un creador de carruseles virales de Instagram. Escribes en español, directo, con ganchos fuertes, en el tono de voz de la marca y pensando en su cliente ideal. Cada slide: titulo corto y potente (máx 60 caracteres) y cuerpo de apoyo (máx 220 caracteres). El primer slide es la portada-gancho (cuerpo breve o vacío). El último slide es el CTA (seguir, guardar, comentar). En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}`,
-        `${source.context}\n\nCrea un carrusel de 6-7 slides.\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "caption completo para el post con salto de líneas y CTA", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags mezclando volumen alto y nicho.\n${QUALITY_BAR}\n${COVER_LAYOUT_INSTRUCTION}`
+        `${source.context}\n\nCrea un carrusel de 6-7 slides.\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "caption completo para el post con salto de líneas y CTA", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags mezclando volumen alto y nicho.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió slides"), 500);
       const q = clampQuality(gen.calidad);
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
       const [row] = await sql<{ id: number }[]>`
         INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
         VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
-          ${JSON.stringify(applyCoverLayout(gen))}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
+          ${JSON.stringify(applyCoverLayout(gen, coverLayouts))}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
           NULL, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
         RETURNING id
       `;

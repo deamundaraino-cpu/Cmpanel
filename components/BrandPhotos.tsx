@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { cutoutFromPhoto, optimizePhoto } from "@/lib/photoProcessing";
 
-type Photo = { id: string; hasCutout: boolean; cover: boolean; avatar: boolean };
+type Photo = { id: string; hasCutout: boolean; cover: boolean; avatar: boolean; bg: boolean };
 
 function imageUrl(p: Photo, kind: "photo" | "cutout") {
   return `/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${kind}`;
@@ -94,7 +94,7 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
     }
   }
 
-  async function toggleFlag(p: Photo, flags: { cover?: boolean; avatar?: boolean }) {
+  async function toggleFlag(p: Photo, flags: { cover?: boolean; avatar?: boolean; bg?: boolean }) {
     setBusy(true);
     try {
       await api("PATCH", { id: p.id, flags });
@@ -133,7 +133,8 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
       <p className="mt-1 text-xs text-zinc-600">
         Hasta {MAX_PHOTOS} fotos tuyas de medio cuerpo, con buena luz y fondo simple. Se les quita el fondo
         automáticamente en tu navegador y se guardan al instante (no hace falta pulsar &quot;Guardar ficha&quot;).
-        Pasa el ratón por una foto para elegir si entra en las portadas o si es la del avatar.
+        Pasa el ratón por una foto para elegir si entra en las portadas, si es la del avatar o si es una imagen de
+        fondo (textura, oficina, escenario) para las composiciones que la usan.
       </p>
 
       {status && (
@@ -155,16 +156,16 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={imageUrl(p, p.hasCutout ? "cutout" : "photo")}
+                src={imageUrl(p, p.hasCutout && !p.bg ? "cutout" : "photo")}
                 alt="Foto de marca"
-                className={`h-full w-full ${p.hasCutout ? "object-contain object-bottom" : "object-cover"}`}
+                className={`h-full w-full ${p.hasCutout && !p.bg ? "object-contain object-bottom" : "object-cover"}`}
               />
               <span
                 className={`absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  p.hasCutout ? "bg-emerald-500/90 text-black" : "bg-amber-500/90 text-black"
+                  p.bg ? "bg-sky-500/90 text-black" : p.hasCutout ? "bg-emerald-500/90 text-black" : "bg-amber-500/90 text-black"
                 }`}
               >
-                {p.hasCutout ? "Recortada" : "Sin recorte"}
+                {p.bg ? "Fondo" : p.hasCutout ? "Recortada" : "Sin recorte"}
               </span>
               {p.avatar && (
                 <span className="absolute bottom-1 right-1 rounded bg-indigo-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
@@ -190,7 +191,7 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
                 >
                   {p.cover ? "Quitar de portadas" : "Usar en portadas"}
                 </button>
-                {!p.avatar && (
+                {!p.avatar && !p.bg && (
                   <button
                     type="button"
                     onClick={() => toggleFlag(p, { avatar: true })}
@@ -201,6 +202,15 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
                     Avatar
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => toggleFlag(p, { bg: !p.bg })}
+                  disabled={busy}
+                  title="Usarla como imagen de fondo de las composiciones"
+                  className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white hover:text-sky-300"
+                >
+                  {p.bg ? "No es fondo" : "Fondo"}
+                </button>
                 {!p.hasCutout && (
                   <button
                     type="button"

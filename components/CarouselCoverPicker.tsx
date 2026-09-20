@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COVER_LAYOUTS } from "@/lib/brandDesign";
+import { COVER_LAYOUTS, type CoverLayout } from "@/lib/brandDesign";
 
 type Photo = { id: string; hasCutout: boolean };
 
@@ -9,12 +9,14 @@ type Photo = { id: string; hasCutout: boolean };
 export default function CarouselCoverPicker({
   id,
   photos,
+  layouts,
   layout,
   selectedPhoto,
   onChanged,
 }: {
   id: number;
   photos: Photo[];
+  layouts: CoverLayout[];
   layout?: string;
   selectedPhoto?: string;
   onChanged: () => void;
@@ -23,7 +25,8 @@ export default function CarouselCoverPicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!photos.length) return null;
+  const options = COVER_LAYOUTS.filter((l) => layouts.includes(l.value));
+  if (!options.length) return null;
 
   async function save(next: { layout?: string; foto?: string }) {
     setBusy(true);
@@ -48,7 +51,7 @@ export default function CarouselCoverPicker({
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2">
       <span className="text-[11px] text-zinc-500">Portada:</span>
-      {COVER_LAYOUTS.map((l) => (
+      {options.map((l) => (
         <button
           key={l.value}
           onClick={() => save({ layout: l.value })}

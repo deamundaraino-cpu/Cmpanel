@@ -11,7 +11,7 @@ export const MAX_PHOTOS = 8;
 export const MAX_PHOTO_CHARS = 900_000;
 export const MAX_CUTOUT_CHARS = 3_500_000;
 
-export type PhotoFlags = { cover: boolean; avatar: boolean };
+export type PhotoFlags = { cover: boolean; avatar: boolean; bg: boolean };
 export type PhotoMeta = { id: string; hasCutout: boolean } & PhotoFlags;
 
 function parseIds(raw: string | null): string[] {
@@ -89,9 +89,10 @@ export async function listPhotoMeta(clientId: number): Promise<PhotoMeta[]> {
     .map((id) => ({
       id,
       hasCutout: keys.has(`brand_cutout_${id}`),
-      // Por defecto toda foto sirve para portadas; el avatar se marca a mano.
-      cover: flags[id]?.cover !== false,
+      // Por defecto toda foto sirve para portadas; avatar y fondo se marcan a mano.
+      cover: flags[id]?.cover !== false && flags[id]?.bg !== true,
       avatar: flags[id]?.avatar === true,
+      bg: flags[id]?.bg === true,
     }));
 }
 
@@ -100,12 +101,21 @@ export async function setPhotoFlags(clientId: number, id: string, next: Partial<
   if (!meta.some((p) => p.id === id)) throw new Error("Foto no encontrada");
   const flags: Record<string, Partial<PhotoFlags>> = {};
   for (const p of meta) {
-    const cover = p.id === id && next.cover !== undefined ? next.cover : p.cover;
+    const mine = p.id === id;
+    const bg = mine && next.bg !== undefined ? next.bg : p.bg;
+    // Una imagen de fondo no se usa como figura de portada.
+    const cover = bg ? false : mine && next.cover !== undefined ? next.cover : p.cover;
     // El avatar es uno solo: marcar una desmarca las demás.
-    const avatar = next.avatar === true ? p.id === id : p.id === id && next.avatar === false ? false : p.avatar;
-    flags[p.id] = { cover, avatar };
+    const avatar = next.avatar === true ? mine : mine && next.avatar === false ? false : p.avatar;
+    flags[p.id] = { cover, avatar, bg };
   }
   await setSetting(clientId, "brand_photo_flags", JSON.stringify(flags));
+}
+
+/** Imagen de fondo de marca (textura, oficina) para las composiciones que la admiten. */
+export function chooseBackgroundPhoto(meta: PhotoMeta[], seed: string): PhotoMeta | null {
+  const pool = meta.filter((m) => m.bg);
+  return pool.length ? pool[hashString(seed) % pool.length] : null;
 }
 
 /** Foto del avatar de los slides interiores: la marcada, o la primera disponible. */

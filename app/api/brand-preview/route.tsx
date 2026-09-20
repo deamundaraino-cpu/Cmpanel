@@ -12,6 +12,13 @@ const DEMO_TITLES: Record<CoverLayout, string> = {
   split: "Antes de invertir en **anuncios**, haz esto",
   texto_detras: "El **embudo** que nadie te explica",
   numero: "3 **hábitos** que cambiaron mi negocio",
+  editorial_lateral: "Lo que nadie te cuenta del **primer millón**",
+  marco: "La estrategia que **sí** funciona",
+  banda: "Cómo ordenar tus **números** este mes",
+  retrato: "Tips de **productividad** que necesitas",
+  tipografico: "Cómo **destacar** en tu sector",
+  declaracion: "Tu precio no es el **problema**",
+  cita: "Nadie compra lo que no **entiende**",
 };
 
 export async function GET(req: NextRequest) {

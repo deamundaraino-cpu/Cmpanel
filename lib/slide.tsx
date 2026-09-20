@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEmphasis, stripEmphasis } from "./emphasis";
 import { BrandDesign, COVER_LAYOUTS, DEFAULT_DESIGN, FONT_PAIRS, type CoverLayout, type VisualStyle } from "./brandDesign";
+import { BOX_PAD, fitLines, LINE_HEIGHT, metricsFor, tokens } from "./typeset";
 
 export { COVER_LAYOUTS, VISUAL_STYLES } from "./brandDesign";
 export type { CoverLayout, VisualStyle } from "./brandDesign";
@@ -65,6 +66,7 @@ export type BrandStyle = {
   secondary: string;
   extra?: string[]; // colores adicionales de la paleta, en orden de preferencia
   coverPhoto?: BrandPhoto | null; // foto elegida para la portada de este carrusel (con recorte si existe)
+  backgroundPhoto?: BrandPhoto | null; // imagen de fondo de marca (textura, espacio) para las composiciones
   avatar?: string | null; // foto para el avatar de los slides interiores
   visualStyle: VisualStyle;
   design?: BrandDesign; // esquema visual de la marca (tipografía, resaltados, formas)
@@ -708,15 +710,20 @@ function keywordOf(titulo: string): string {
     .reduce((a, b) => (b.length > a.length ? b : a), "");
 }
 
-/** Composición por defecto si la IA no eligió (o eligió una que no encaja con el título). */
-function resolveCoverLayout(slide: Slide): CoverLayout {
+/**
+ * Composición de la portada. Si viene elegida (a mano o por la IA) se respeta
+ * siempre; solo se cambia cuando es imposible de dibujar (un número gigante sin
+ * número en el título). El resto son sugerencias por el contenido.
+ */
+function resolveCoverLayout(slide: Slide, allowed: CoverLayout[]): CoverLayout {
   const chosen = COVER_LAYOUTS.some((l) => l.value === slide.layout) ? slide.layout! : null;
+  if (chosen) return chosen === "numero" && !leadingNumber(slide.titulo) ? "texto_detras" : chosen;
   const num = leadingNumber(slide.titulo);
   const kw = keywordOf(slide.titulo);
-  let layout: CoverLayout = chosen || (num ? "numero" : kw.length <= 12 && hashString(slide.titulo) % 2 ? "texto_detras" : "split");
-  if (layout === "numero" && !num) layout = "texto_detras";
-  if (layout === "texto_detras" && kw.length > 14) layout = "split";
-  return layout;
+  const pool = allowed.length ? allowed : COVER_LAYOUTS.map((l) => l.value);
+  if (num && pool.includes("numero")) return "numero";
+  if (kw.length <= 14 && pool.includes("texto_detras") && hashString(slide.titulo) % 2) return "texto_detras";
+  return pool[hashString(slide.titulo) % pool.length];
 }
 
 function CoverFooter({ style, theme, total }: { style: BrandStyle; theme: Theme; total: number }) {
@@ -753,9 +760,146 @@ function CoverFooter({ style, theme, total }: { style: BrandStyle; theme: Theme;
   );
 }
 
+type CoverArgs = { slide: Slide; total: number; style: BrandStyle; theme: Theme; photo: BrandPhoto | null };
+
+function Abs({ x = 0, y = 0, w = W, h, style, children }: {
+  x?: number;
+  y?: number;
+  w?: number;
+  h: number;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+}) {
+  return <div style={{ position: "absolute", left: x, top: y, width: w, height: h, display: "flex", ...style }}>{children}</div>;
+}
+
+/** Fondo de la portada: imagen de fondo de la marca con velo, o color/degradado del ADN. */
+function CoverBg({ style, theme, tone }: { style: BrandStyle; theme: Theme; tone: "dark" | "light" }) {
+  const base = tone === "light" ? theme.light : canvasBg(style, theme);
+  const bg = style.backgroundPhoto;
+  return (
+    <>
+      <Abs h={H} style={{ background: base }} />
+      {bg ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bg.src}
+            width={W}
+            height={H}
+            style={{ position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover", display: "flex" }}
+          />
+          <Abs h={H} style={{ background: alpha(tone === "light" ? theme.light : theme.dark, tone === "light" ? 0.82 : 0.78) }} />
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** Titular ajustado a una zona, con el resaltado que use la marca. */
+function FitTitle({
+  text,
+  style,
+  theme,
+  zone,
+  maxSize,
+  color,
+  align = "flex-start",
+  maxLines = 4,
+  strongColor,
+  strongBg,
+}: {
+  text: string;
+  style: BrandStyle;
+  theme: Theme;
+  zone: { w: number; h: number };
+  maxSize: number;
+  color: string;
+  align?: "flex-start" | "center";
+  maxLines?: number;
+  strongColor?: string;
+  strongBg?: string;
+}) {
+  // Sobre un fondo del color de acento, el resaltado no puede ser ese mismo color.
+  const hiBg = strongBg || theme.accent;
+  const hiColor = strongColor || theme.accent;
+  const d = designOf(style);
+  const family = pairOf(style).display.family;
+  const m = metricsFor(family);
+  const lines = fitLines(tokens(text, d.textCase === "upper"), zone, {
+    m,
+    maxSize,
+    boxed: d.emphasis === "box",
+    maxLines,
+  });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: align, gap: Math.round(Math.min(...lines.map((l) => l.size)) * 0.1) }}>
+      {lines.map((l, i) => (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            columnGap: Math.round(l.size * m.space),
+            fontFamily: family,
+            fontSize: l.size,
+            lineHeight: LINE_HEIGHT,
+          }}
+        >
+          {l.chunks.map((c, j) => {
+            const boxed = c.strong && d.emphasis === "box";
+            return (
+              <div
+                key={j}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  color: boxed ? contrastText(hiBg) : c.strong ? hiColor : color,
+                  background: boxed ? hiBg : "transparent",
+                  padding: boxed ? `${Math.round(l.size * 0.05)}px ${Math.round(l.size * BOX_PAD)}px 0` : 0,
+                  borderRadius: boxed ? radius(style, Math.round(l.size * 0.06)) : 0,
+                }}
+              >
+                {c.text}
+                {c.strong && d.emphasis === "underline" ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      height: Math.max(5, Math.round(l.size * 0.08)),
+                      marginTop: Math.round(l.size * 0.04),
+                      background: hiColor,
+                    }}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Rule({ color, width = 2 }: { color: string; width?: number }) {
+  return <div style={{ display: "flex", width: "100%", height: width, background: color }} />;
+}
+
+function Kicker({ text, color, size = 24 }: { text: string; color: string; size?: number }) {
+  return (
+    <div style={{ display: "flex", fontSize: size, fontWeight: 800, letterSpacing: size * 0.18, color }}>
+      {text.toUpperCase()}
+    </div>
+  );
+}
+
 function coverTextoDetras(slide: Slide, total: number, style: BrandStyle, theme: Theme, fig: Figure) {
   const keyword = cased(keywordOf(slide.titulo), style);
-  const kwSize = Math.floor(clamp(960 / (Math.max(keyword.length, 3) * 0.56), 150, 400));
+  // Ancho medido con la tipografía real de la marca: una palabra larga baja de
+  // tamaño en vez de salirse del lienzo.
+  const kwMetrics = metricsFor(pairOf(style).display.family);
+  const kwSize = Math.floor(clamp((W - 80) / Math.max(kwMetrics.width(keyword), 1), 120, 400));
   const box = figureBox(fig.cutout, 1040, 980);
   const size = titleSize(slide.titulo, 88, 66, 104);
   return (
@@ -844,13 +988,22 @@ function coverSplit(slide: Slide, total: number, style: BrandStyle, theme: Theme
                 fontFamily: pairOf(style).display.family,
                 fontSize: size,
                 lineHeight: 1.04,
-                color: w.strong ? theme.accent : onAccent,
+                flexDirection: "column",
+                alignItems: "flex-start",
+                color: w.strong
+                  ? designOf(style).emphasis === "box"
+                    ? theme.accent
+                    : theme.dark
+                  : onAccent,
                 background: w.strong && designOf(style).emphasis === "box" ? theme.dark : "transparent",
                 padding: w.strong && designOf(style).emphasis === "box" ? `2px ${Math.round(size * 0.12)}px` : "2px 0",
                 borderRadius: radius(style, 8),
               }}
             >
               {w.text}
+              {w.strong && designOf(style).emphasis === "underline" ? (
+                <div style={{ display: "flex", width: "100%", height: Math.max(5, size * 0.08), marginTop: size * 0.04, background: theme.dark }} />
+              ) : null}
             </div>
           ))}
         </div>
@@ -977,17 +1130,247 @@ function coverFotoFondo(slide: Slide, total: number, style: BrandStyle, theme: T
   );
 }
 
+// ————— Composiciones editoriales, corporativas y tipográficas —————
+
+/** Foto a un lado, titular al otro con filetes y firma: portada de revista. */
+function coverEditorialLateral({ slide, total, style, theme, photo }: CoverArgs) {
+  const panelW = 520;
+  const ink = theme.dark;
+  const col = { x: panelW + 70, w: W - panelW - 70 - 72 };
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.light }}>
+      <Abs w={panelW} h={H} style={{ background: mix(theme.dark, theme.accent, 0.15) }} />
+      {photo?.cutout ? (
+        <FigureImg cutout={photo.cutout} left={0} box={figureBox(photo.cutout, H - 120, panelW + 60)} />
+      ) : photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.src} width={panelW} height={H} style={{ position: "absolute", left: 0, top: 0, width: panelW, height: H, objectFit: "cover", display: "flex" }} />
+      ) : null}
+
+      <Abs x={col.x} y={150} w={col.w} h={H - 300} style={{ flexDirection: "column", justifyContent: "center", gap: 26 }}>
+        <Kicker text={style.brandName} color={theme.accent} />
+        <Rule color={alpha(ink, 0.25)} />
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: col.w, h: 540 }} maxSize={96} color={ink} />
+        <Rule color={alpha(ink, 0.25)} />
+        <div style={{ display: "flex", fontSize: 26, color: alpha(ink, 0.6) }}>Por {style.brandHandle}</div>
+      </Abs>
+      <Abs x={col.x} y={H - 120} w={col.w} h={40} style={{ alignItems: "center" }}>
+        <div style={{ display: "flex", fontSize: 24, fontWeight: 800, color: theme.accent }}>{total > 1 ? "Desliza »" : "Guarda esto »"}</div>
+      </Abs>
+    </div>
+  );
+}
+
+/** Foto enmarcada sobre fondo limpio y titular debajo. */
+function coverMarco({ slide, total, style, theme, photo }: CoverArgs) {
+  const ink = theme.dark;
+  const frame = { x: 90, y: 130, w: W - 180, h: 700 };
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.light }}>
+      <Abs x={frame.x - 14} y={frame.y - 14} w={frame.w + 28} h={frame.h + 28} style={{ border: `2px solid ${alpha(ink, 0.35)}`, borderRadius: radius(style, 8) }} />
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo.src}
+          width={frame.w}
+          height={frame.h}
+          style={{ position: "absolute", left: frame.x, top: frame.y, width: frame.w, height: frame.h, objectFit: "cover", borderRadius: radius(style, 4), display: "flex" }}
+        />
+      ) : (
+        <Abs x={frame.x} y={frame.y} w={frame.w} h={frame.h} style={{ background: mix(theme.light, ink, 0.1) }} />
+      )}
+      <Abs x={90} y={frame.y + frame.h + 60} w={W - 180} h={300} style={{ flexDirection: "column", alignItems: "center", gap: 24 }}>
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: W - 220, h: 230 }} maxSize={92} color={ink} align="center" maxLines={3} />
+      </Abs>
+      <Abs y={H - 110} h={40} style={{ justifyContent: "center", alignItems: "center", gap: 18 }}>
+        <Kicker text={style.brandHandle} color={alpha(ink, 0.55)} size={22} />
+      </Abs>
+    </div>
+  );
+}
+
+/** Foto arriba, franja de color abajo con el titular: orden corporativo. */
+function coverBanda({ slide, total, style, theme, photo }: CoverArgs) {
+  const bandY = 860;
+  const onAccent = contrastText(theme.accent);
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.dark }}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.src} width={W} height={bandY} style={{ position: "absolute", left: 0, top: 0, width: W, height: bandY, objectFit: "cover", display: "flex" }} />
+      ) : (
+        <Abs h={bandY} style={{ background: canvasBg(style, theme) }} />
+      )}
+      <Abs y={bandY} h={H - bandY} style={{ background: theme.accent, flexDirection: "column", justifyContent: "center", padding: "0 72px" }}>
+        <FitTitle
+          text={slide.titulo}
+          style={style}
+          theme={theme}
+          zone={{ w: W - 144, h: 300 }}
+          maxSize={88}
+          color={onAccent}
+          strongColor={theme.dark}
+          strongBg={theme.dark}
+          maxLines={3}
+        />
+      </Abs>
+      <Abs x={72} y={H - 96} w={W - 144} h={40} style={{ alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color: alpha(onAccent, 0.8) }}>{style.brandHandle}</div>
+        <div style={{ display: "flex", fontSize: 24, fontWeight: 800, color: alpha(onAccent, 0.8) }}>{total > 1 ? "Desliza »" : ""}</div>
+      </Abs>
+    </div>
+  );
+}
+
+/** Foto a sangre y titular centrado abajo sobre degradado. */
+function coverRetrato({ slide, total, style, theme, photo }: CoverArgs) {
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.dark }}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.src} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover", display: "flex" }} />
+      ) : (
+        <CoverBg style={style} theme={theme} tone="dark" />
+      )}
+      <Abs h={H} style={{ background: `linear-gradient(180deg, ${alpha(theme.dark, 0.25)} 0%, ${alpha(theme.dark, 0)} 35%, ${alpha(theme.dark, 0.8)} 70%, ${theme.dark} 100%)` }} />
+      <Abs x={72} y={820} w={W - 144} h={340} style={{ flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 20 }}>
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: W - 160, h: 280 }} maxSize={110} color="#ffffff" align="center" maxLines={3} />
+        {slide.cuerpo ? (
+          <div style={{ display: "flex", fontSize: 32, color: alpha("#ffffff", 0.82), textAlign: "center" }}>{slide.cuerpo}</div>
+        ) : null}
+      </Abs>
+      <Abs y={H - 120} h={44} style={{ justifyContent: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 24,
+            fontWeight: 800,
+            color: "#ffffff",
+            background: alpha(theme.dark, 0.55),
+            borderRadius: radius(style, 999) || 4,
+            padding: "8px 20px",
+          }}
+        >
+          {style.brandHandle}
+        </div>
+      </Abs>
+    </div>
+  );
+}
+
+/** Solo tipografía: el titular ocupa la portada. */
+function coverTipografico({ slide, total, style, theme }: CoverArgs) {
+  const d = designOf(style);
+  const align = d.align === "center" ? "center" : "flex-start";
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.dark }}>
+      <CoverBg style={style} theme={theme} tone="dark" />
+      <Abs x={72} y={70} w={W - 144} h={40} style={{ alignItems: "center", justifyContent: "space-between" }}>
+        <Kicker text={style.brandName} color={alpha("#ffffff", 0.7)} size={22} />
+        <div style={{ display: "flex", fontSize: 22, fontWeight: 800, color: alpha("#ffffff", 0.5) }}>1/{total}</div>
+      </Abs>
+      <Abs x={72} y={230} w={W - 144} h={760} style={{ flexDirection: "column", justifyContent: "center", alignItems: align }}>
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: W - 144, h: 720 }} maxSize={240} color="#ffffff" align={align} />
+      </Abs>
+      <Abs x={72} y={H - 190} w={W - 144} h={120} style={{ alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color: alpha("#ffffff", 0.75) }}>{style.brandHandle}</div>
+        <div
+          style={{
+            display: "flex",
+            width: 120,
+            height: 120,
+            borderRadius: radius(style, 60) || 10,
+            background: theme.accent,
+            color: contrastText(theme.accent),
+            fontSize: 22,
+            fontWeight: 800,
+            alignItems: "center",
+            justifyContent: "center",
+            ...(d.tilt ? { transform: "rotate(-8deg)" } : {}),
+          }}
+        >
+          {total > 1 ? "desliza" : "guarda"}
+        </div>
+      </Abs>
+    </div>
+  );
+}
+
+/** Una sola frase centrada con mucho aire: minimalismo de alto estatus. */
+function coverDeclaracion({ slide, style, theme }: CoverArgs) {
+  const ink = theme.dark;
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.light }}>
+      <CoverBg style={style} theme={theme} tone="light" />
+      <Abs y={300} h={40} style={{ justifyContent: "center", alignItems: "center" }}>
+        <div style={{ display: "flex", width: 90, height: 4, background: theme.accent }} />
+      </Abs>
+      <Abs x={140} y={400} w={W - 280} h={520} style={{ flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: W - 300, h: 480 }} maxSize={120} color={ink} align="center" maxLines={4} />
+      </Abs>
+      <Abs y={H - 220} h={40} style={{ justifyContent: "center", alignItems: "center" }}>
+        <Kicker text={style.brandHandle} color={alpha(ink, 0.55)} size={22} />
+      </Abs>
+    </div>
+  );
+}
+
+/** La frase como cita, con comillas grandes y firma. */
+function coverCita({ slide, style, theme, photo }: CoverArgs) {
+  const family = pairOf(style).display.family;
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: pairOf(style).body.family, background: theme.dark }}>
+      <CoverBg style={style} theme={theme} tone="dark" />
+      <Abs x={72} y={190} w={400} h={260}>
+        <div style={{ display: "flex", fontFamily: family, fontSize: 300, lineHeight: 1, color: theme.accent }}>{"“"}</div>
+      </Abs>
+      <Abs x={72} y={430} w={W - 144} h={560} style={{ flexDirection: "column", justifyContent: "flex-start" }}>
+        <FitTitle text={slide.titulo} style={style} theme={theme} zone={{ w: W - 144, h: 520 }} maxSize={110} color="#ffffff" maxLines={4} />
+      </Abs>
+      <Abs x={72} y={H - 220} w={W - 144} h={120} style={{ flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", width: 90, height: 4, background: theme.accent }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo.src}
+              width={72}
+              height={72}
+              style={{ width: 72, height: 72, borderRadius: radius(style, 36) || 6, objectFit: "cover", display: "flex" }}
+            />
+          ) : null}
+          <div style={{ display: "flex", fontSize: 28, fontWeight: 800, color: alpha("#ffffff", 0.85) }}>{style.brandHandle}</div>
+        </div>
+      </Abs>
+    </div>
+  );
+}
+
 function renderFotoPersonal(slide: Slide, index: number, total: number, style: BrandStyle) {
   if (index !== 0) return renderBoldImpacto(slide, index, total, style, style.avatar || undefined);
-  const photo = style.coverPhoto;
-  if (!photo) return renderBoldImpacto(slide, index, total, style);
   const theme = resolveTheme(style);
-  if (!photo.cutout) return coverFotoFondo(slide, total, style, theme, photo);
-  const fig = { photo, cutout: photo.cutout };
-  const layout = resolveCoverLayout(slide);
-  if (layout === "numero") return coverNumero(slide, total, style, theme, fig);
-  if (layout === "texto_detras") return coverTextoDetras(slide, total, style, theme, fig);
-  return coverSplit(slide, total, style, theme, fig);
+  const photo = style.coverPhoto || null;
+  const layout = resolveCoverLayout(slide, designOf(style).coverLayouts);
+  const args: CoverArgs = { slide, total, style, theme, photo };
+
+  // Las composiciones con figura necesitan recorte; sin él se cae a una que
+  // funcione con la foto tal cual.
+  if (photo?.cutout) {
+    const fig = { photo, cutout: photo.cutout };
+    if (layout === "numero") return coverNumero(slide, total, style, theme, fig);
+    if (layout === "texto_detras") return coverTextoDetras(slide, total, style, theme, fig);
+    if (layout === "split") return coverSplit(slide, total, style, theme, fig);
+  } else if (layout === "numero" || layout === "texto_detras" || layout === "split") {
+    return photo ? coverFotoFondo(slide, total, style, theme, photo) : coverTipografico(args);
+  }
+
+  if (layout === "editorial_lateral") return coverEditorialLateral(args);
+  if (layout === "marco") return coverMarco(args);
+  if (layout === "banda") return coverBanda(args);
+  if (layout === "retrato") return coverRetrato(args);
+  if (layout === "declaracion") return coverDeclaracion(args);
+  if (layout === "cita") return coverCita(args);
+  return coverTipografico(args);
 }
 
 export function renderSlide(opts: { slide: Slide; index: number; total: number; style: BrandStyle }) {

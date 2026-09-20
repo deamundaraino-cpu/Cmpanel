@@ -1,3 +1,5 @@
+import { COVER_LAYOUTS, type CoverLayout } from "./brandDesign";
+
 export type QualityGen = { score: number; razon: string };
 
 export type CarouselGen = {
@@ -8,21 +10,22 @@ export type CarouselGen = {
   portada_layout?: string;
 };
 
-const COVER_LAYOUT_VALUES = ["split", "texto_detras", "numero"];
-
-/** Pide a la IA la composición de portada (solo se usa con el estilo "Con tu foto"). */
-export const COVER_LAYOUT_INSTRUCTION = `Elige además la composición visual de la PORTADA como "portada_layout", una de:
-- "numero": SOLO si el titulo de la portada empieza con un número (ej: "3 errores que…"). El número se muestra gigante.
-- "texto_detras": si la frase clave entre ** es 1-2 palabras cortas y potentes (máx 12 letras). Esa palabra va gigante detrás de la persona.
-- "split": para ganchos más largos, preguntas o frases de autoridad. Titular en un bloque de color junto a la persona.
-Varía la elección entre carruseles cuando el gancho lo permita.`;
+/** Pide a la IA la composición de portada, limitada a las que usa la marca. */
+export function coverLayoutInstruction(allowed: CoverLayout[]): string {
+  const pool = COVER_LAYOUTS.filter((l) => allowed.includes(l.value));
+  const list = (pool.length ? pool : COVER_LAYOUTS)
+    .map((l) => `- "${l.value}" (${l.vibe}): ${l.hint}`)
+    .join("\n");
+  return `Elige además la composición visual de la PORTADA como "portada_layout", una de estas:
+${list}
+Usa "numero" solo si el titulo de portada empieza con un número. Varía la elección entre carruseles cuando el gancho lo permita, y prioriza la que mejor sostenga el titular (los titulares largos piden composiciones con más espacio de texto).`;
+}
 
 /** Guarda la composición elegida en la portada; si la IA no eligió una válida, el render decide por el título. */
-export function applyCoverLayout(gen: CarouselGen): CarouselGen["slides"] {
+export function applyCoverLayout(gen: CarouselGen, allowed: CoverLayout[]): CarouselGen["slides"] {
   const slides = gen.slides.map(({ titulo, cuerpo }) => ({ titulo, cuerpo }));
-  if (slides[0] && COVER_LAYOUT_VALUES.includes(gen.portada_layout || "")) {
-    return [{ ...slides[0], layout: gen.portada_layout }, ...slides.slice(1)];
-  }
+  const chosen = COVER_LAYOUTS.find((l) => l.value === gen.portada_layout && allowed.includes(l.value));
+  if (slides[0] && chosen) return [{ ...slides[0], layout: chosen.value }, ...slides.slice(1)];
   return slides;
 }
 

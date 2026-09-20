@@ -352,10 +352,11 @@ export default function BrandForm() {
           <div className="mt-5">
             <span className="text-xs font-medium text-zinc-400">Composiciones de portada con tu foto</span>
             <p className="mt-1 text-xs text-zinc-600">
-              Al generar cada carrusel, la IA elige la que mejor encaja con el gancho (los títulos que empiezan con
-              número usan &quot;Número protagonista&quot;). Necesitan al menos una foto recortada.
+              Al generar cada carrusel, la IA elige entre las que hayas activado en el esquema de diseño. Las tres
+              primeras necesitan una foto recortada; las demás funcionan con foto normal, con imagen de fondo o solo
+              con tipografía.
             </p>
-            <div className="mt-2 grid grid-cols-3 gap-3">
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {COVER_LAYOUTS.map((layout) => (
                 <div key={layout.value} className="overflow-hidden rounded-lg border border-zinc-700">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -364,7 +365,8 @@ export default function BrandForm() {
                     alt={layout.label}
                     className="aspect-[4/5] w-full object-cover"
                   />
-                  <p className="p-2 text-xs font-semibold text-zinc-200">{layout.label}</p>
+                  <p className="px-2 pt-2 text-xs font-semibold text-zinc-200">{layout.label}</p>
+                  <p className="px-2 pb-2 text-[10px] leading-snug text-zinc-500">{layout.hint}</p>
                 </div>
               ))}
             </div>

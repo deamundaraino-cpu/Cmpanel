@@ -3,7 +3,7 @@ import { requireClient } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
 import { getBrandDesign } from "@/lib/brand";
 import { listPhotoMeta } from "@/lib/brandPhotos";
-import { orderedReelTemplates } from "@/lib/brandDesign";
+import { brandCoverLayouts, orderedReelTemplates } from "@/lib/brandDesign";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function ProposalsPage() {
   ]);
   // Las plantillas se muestran en el orden que el esquema de la marca prefiere.
   const reelTemplates = orderedReelTemplates(design);
+  const coverLayouts = brandCoverLayouts(design);
   const coverPhotos = photos.filter((p) => p.cover).map(({ id, hasCutout }) => ({ id, hasCutout }));
 
   return (
@@ -42,6 +43,7 @@ export default async function ProposalsPage() {
               slides={isScript ? [] : parsed}
               beats={isScript ? parsed : []}
               reelTemplates={reelTemplates}
+              coverLayouts={coverLayouts}
               photos={coverPhotos}
               caption={p.caption || ""}
               hashtags={p.hashtags ? JSON.parse(p.hashtags) : []}

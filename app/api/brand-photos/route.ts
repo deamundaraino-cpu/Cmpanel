@@ -65,10 +65,11 @@ export async function PATCH(req: NextRequest) {
     if (typeof body.id !== "string") return fail(new Error("Falta id"), 400);
 
     if (body.flags && typeof body.flags === "object") {
-      const { cover, avatar } = body.flags as { cover?: unknown; avatar?: unknown };
+      const { cover, avatar, bg } = body.flags as { cover?: unknown; avatar?: unknown; bg?: unknown };
       await setPhotoFlags(auth.clientId, body.id, {
         ...(typeof cover === "boolean" ? { cover } : {}),
         ...(typeof avatar === "boolean" ? { avatar } : {}),
+        ...(typeof bg === "boolean" ? { bg } : {}),
       });
       return NextResponse.json({ ok: true });
     }

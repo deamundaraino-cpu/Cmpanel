@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { stripEmphasis } from "@/lib/emphasis";
 import ReelCoverPicker from "./ReelCoverPicker";
 import CarouselCoverPicker from "./CarouselCoverPicker";
-import type { ReelTemplate } from "@/lib/brandDesign";
+import type { CoverLayout, ReelTemplate } from "@/lib/brandDesign";
 
 type Slide = { titulo: string; cuerpo: string; layout?: string; foto?: string };
 type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
@@ -23,6 +23,7 @@ export default function ProposalCard({
   qualityNotes,
   clientFeedback,
   reelTemplates,
+  coverLayouts,
   photos,
 }: {
   id: number;
@@ -37,6 +38,7 @@ export default function ProposalCard({
   qualityNotes?: string | null;
   clientFeedback?: string | null;
   reelTemplates: ReelTemplate[];
+  coverLayouts: CoverLayout[];
   photos: { id: string; hasCutout: boolean }[];
 }) {
   const router = useRouter();
@@ -315,6 +317,7 @@ export default function ProposalCard({
           <CarouselCoverPicker
             id={id}
             photos={photos}
+            layouts={coverLayouts}
             layout={slides[0]?.layout}
             selectedPhoto={slides[0]?.foto}
             onChanged={() => setCoverVersion((v) => v + 1)}

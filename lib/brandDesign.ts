@@ -113,12 +113,50 @@ export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[
   },
 ];
 
-export type CoverLayout = "split" | "texto_detras" | "numero";
+export type CoverLayout =
+  | "split"
+  | "texto_detras"
+  | "numero"
+  | "editorial_lateral"
+  | "marco"
+  | "banda"
+  | "retrato"
+  | "tipografico"
+  | "declaracion"
+  | "cita";
 
-export const COVER_LAYOUTS: { value: CoverLayout; label: string; hint: string }[] = [
-  { value: "split", label: "Split", hint: "Bloque de color con el titular y tu figura saliendo del borde." },
-  { value: "texto_detras", label: "Texto detrás", hint: "La palabra clave gigante y tu figura delante." },
-  { value: "numero", label: "Número protagonista", hint: "Un número enorme con tu figura encima. Para títulos tipo lista." },
+export const COVER_LAYOUTS: {
+  value: CoverLayout;
+  label: string;
+  hint: string;
+  /** Necesita la figura recortada (sin fondo). */
+  needsCutout?: boolean;
+  /** Funciona sin ninguna foto: solo tipografía (y fondo, si lo hay). */
+  textOnly?: boolean;
+  /** Registro visual, para que la IA elija con criterio. */
+  vibe: "impacto" | "elegante" | "corporativo" | "editorial";
+}[] = [
+  { value: "split", label: "Split", hint: "Bloque de color con el titular y tu figura saliendo del borde.", needsCutout: true, vibe: "impacto" },
+  { value: "texto_detras", label: "Texto detrás", hint: "La palabra clave gigante y tu figura delante.", needsCutout: true, vibe: "impacto" },
+  { value: "numero", label: "Número protagonista", hint: "Un número enorme con tu figura encima. Para títulos tipo lista.", needsCutout: true, vibe: "impacto" },
+  {
+    value: "editorial_lateral",
+    label: "Editorial lateral",
+    hint: "Tu foto a un lado y el titular al otro, con filetes finos y firma. Aire de portada de revista.",
+    vibe: "editorial",
+  },
+  { value: "marco", label: "Marco", hint: "Tu foto enmarcada sobre fondo limpio y el titular debajo. Sobrio y premium.", vibe: "elegante" },
+  { value: "banda", label: "Banda inferior", hint: "Foto arriba y franja de color abajo con el titular. Orden corporativo.", vibe: "corporativo" },
+  { value: "retrato", label: "Retrato", hint: "Tu foto a sangre con el titular centrado abajo sobre degradado.", vibe: "elegante" },
+  { value: "tipografico", label: "Tipográfico", hint: "Sin foto: titular gigante ocupando la portada, con insignia de deslizar.", textOnly: true, vibe: "impacto" },
+  {
+    value: "declaracion",
+    label: "Declaración",
+    hint: "Sin foto: una sola frase centrada con mucho aire. Minimalismo de alto estatus.",
+    textOnly: true,
+    vibe: "elegante",
+  },
+  { value: "cita", label: "Cita", hint: "Comillas grandes, la frase como cita y tu firma. Autoridad tranquila.", textOnly: true, vibe: "editorial" },
 ];
 
 export type ReelTemplate = "centro" | "arriba" | "circulo" | "cintas" | "cita" | "split" | "detras";
@@ -143,6 +181,7 @@ export type BrandDesign = {
   tilt: boolean;
   visualStyle: VisualStyle;
   reelTemplates: ReelTemplate[];
+  coverLayouts: CoverLayout[];
   notes?: string;
 };
 
@@ -156,6 +195,7 @@ export const DEFAULT_DESIGN: BrandDesign = {
   tilt: true,
   visualStyle: "foto_personal",
   reelTemplates: REEL_TEMPLATES.map((t) => t.value),
+  coverLayouts: COVER_LAYOUTS.map((l) => l.value),
 };
 
 export const DESIGN_OPTIONS = {
@@ -185,6 +225,9 @@ export function validateDesign(raw: unknown): BrandDesign {
   const templates = Array.isArray(d.reelTemplates)
     ? d.reelTemplates.filter((t): t is ReelTemplate => REEL_TEMPLATES.some((r) => r.value === t))
     : [];
+  const covers = Array.isArray(d.coverLayouts)
+    ? d.coverLayouts.filter((l): l is CoverLayout => COVER_LAYOUTS.some((c) => c.value === l))
+    : [];
   return {
     fontPair: pick(d.fontPair, DESIGN_OPTIONS.fontPair, DEFAULT_DESIGN.fontPair),
     textCase: pick(d.textCase, DESIGN_OPTIONS.textCase, DEFAULT_DESIGN.textCase),
@@ -196,8 +239,14 @@ export function validateDesign(raw: unknown): BrandDesign {
     visualStyle: pick(d.visualStyle, VISUAL_STYLES.map((v) => v.value), DEFAULT_DESIGN.visualStyle),
     // Sin selección válida se mantienen todas: mejor variedad que una lista vacía.
     reelTemplates: templates.length >= 3 ? templates : DEFAULT_DESIGN.reelTemplates,
+    coverLayouts: covers.length >= 2 ? covers : DEFAULT_DESIGN.coverLayouts,
     notes: typeof d.notes === "string" ? d.notes.slice(0, 300) : undefined,
   };
+}
+
+/** Composiciones de portada de carrusel que usa la marca (siempre alguna válida). */
+export function brandCoverLayouts(design: BrandDesign): CoverLayout[] {
+  return design.coverLayouts.length ? design.coverLayouts : DEFAULT_DESIGN.coverLayouts;
 }
 
 /** Plantillas de reel en el orden que prefiere la marca (el resto queda al final). */
@@ -207,7 +256,7 @@ export function orderedReelTemplates(design: BrandDesign): ReelTemplate[] {
 }
 
 export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha de marca, elige el esquema visual con el que se generarán sus carruseles y portadas de reel. Devuelve SOLO JSON:
-{"fontPair": "...", "textCase": "...", "emphasis": "...", "shape": "...", "background": "...", "align": "...", "tilt": true, "visualStyle": "...", "reelTemplates": ["...", "..."], "notes": "..."}
+{"fontPair": "...", "textCase": "...", "emphasis": "...", "shape": "...", "background": "...", "align": "...", "tilt": true, "visualStyle": "...", "reelTemplates": ["...", "..."], "coverLayouts": ["...", "..."], "notes": "..."}
 
 - fontPair (pareja tipográfica): ${Object.entries(FONT_PAIRS)
   .map(([k, v]) => `"${k}" = ${v.vibe}`)
@@ -220,6 +269,7 @@ export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha d
 - tilt: true solo si a la marca le encaja lo desenfadado (elementos girados, cintas); false para marcas serias.
 - visualStyle, el estilo base del carrusel: "foto_personal" (portadas con la figura recortada), "bold_impacto" (fondo oscuro), "bold_contraste" (bloque de color), "editorial_claro" (fondo claro tipo revista).
 - reelTemplates: entre 4 y 7 de estas, ordenadas de más a menos propia de la marca: ${REEL_TEMPLATES.map((t) => `"${t.value}" (${t.hint})`).join(", ")}. Si tilt es false, no incluyas "circulo" ni "cintas" entre las primeras.
+- coverLayouts: entre 3 y 6 composiciones de portada de carrusel, de más a menos propia de la marca: ${COVER_LAYOUTS.map((l) => `"${l.value}" (${l.vibe}: ${l.hint})`).join(", ")}. Mezcla registros: para marcas sobrias prioriza las elegantes, editoriales o corporativas; para marcas de ataque, las de impacto.
 - notes: una frase explicando la decisión, en español.
 
 Decide por el sector, el tono de voz y el cliente ideal: un asesor tributario no debe verse como un infoproductor de anuncios. Evita el default ruidoso si la marca es sobria.`;

@@ -1,7 +1,7 @@
 import { getSettings } from "./settings";
 import { BrandStyle } from "./slide";
 import { DEFAULT_DESIGN, validateDesign, type BrandDesign, type VisualStyle } from "./brandDesign";
-import { chooseAvatarPhoto, chooseCoverPhoto, listPhotoMeta, loadPhoto } from "./brandPhotos";
+import { chooseAvatarPhoto, chooseBackgroundPhoto, chooseCoverPhoto, listPhotoMeta, loadPhoto } from "./brandPhotos";
 
 const BRIEF_KEYS = [
   "brand_name",
@@ -124,16 +124,18 @@ async function loadStylePhotos(
     needCover = true,
     needAvatar = true,
   }: { coverSeed?: string; photoId?: string; needCover?: boolean; needAvatar?: boolean }
-): Promise<Pick<BrandStyle, "coverPhoto" | "avatar">> {
+): Promise<Pick<BrandStyle, "coverPhoto" | "avatar" | "backgroundPhoto">> {
   const meta = await listPhotoMeta(clientId);
   if (!meta.length) return {};
   // Foto elegida a mano para esta pieza; si no, la que toque por el título.
   const picked = photoId && meta.some((m) => m.id === photoId) ? photoId : null;
   const chosen = needCover ? picked || chooseCoverPhoto(meta, coverSeed)?.id || null : null;
   const avatar = needAvatar ? chooseAvatarPhoto(meta) : null;
-  const [coverPhoto, avatarPhoto] = await Promise.all([
+  const background = needCover ? chooseBackgroundPhoto(meta, coverSeed) : null;
+  const [coverPhoto, avatarPhoto, backgroundPhoto] = await Promise.all([
     chosen ? loadPhoto(clientId, chosen) : null,
     avatar ? loadPhoto(clientId, avatar.id) : null,
+    background ? loadPhoto(clientId, background.id) : null,
   ]);
-  return { coverPhoto, avatar: avatarPhoto?.src || null };
+  return { coverPhoto, avatar: avatarPhoto?.src || null, backgroundPhoto };
 }

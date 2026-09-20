@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import {
+  COVER_LAYOUTS,
   DEFAULT_DESIGN,
   DESIGN_LABELS,
   DESIGN_OPTIONS,
   FONT_PAIRS,
   REEL_TEMPLATES,
   type BrandDesign,
+  type CoverLayout,
   type FontPairKey,
   type ReelTemplate,
 } from "@/lib/brandDesign";
@@ -75,6 +77,13 @@ export default function BrandDesignPanel({ onChanged }: { onChanged: () => void 
     const next = has ? design.reelTemplates.filter((x) => x !== t) : [...design.reelTemplates, t];
     if (next.length < 3) return;
     save({ ...design, reelTemplates: next });
+  };
+
+  const toggleCover = (c: CoverLayout) => {
+    const has = design.coverLayouts.includes(c);
+    const next = has ? design.coverLayouts.filter((x) => x !== c) : [...design.coverLayouts, c];
+    if (next.length < 2) return;
+    save({ ...design, coverLayouts: next });
   };
 
   return (
@@ -148,6 +157,28 @@ export default function BrandDesignPanel({ onChanged }: { onChanged: () => void 
           />
           <span className="text-xs text-zinc-300">Elementos girados (cintas, círculos)</span>
         </label>
+      </div>
+
+      <div className="mt-3">
+        <span className="text-[11px] font-medium text-zinc-500">Composiciones de portada de carrusel</span>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {COVER_LAYOUTS.map((c) => {
+            const active = design.coverLayouts.includes(c.value);
+            return (
+              <button
+                key={c.value}
+                onClick={() => toggleCover(c.value)}
+                disabled={busy}
+                title={c.hint}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                  active ? "border-indigo-500 bg-indigo-500/15 text-zinc-100" : "border-zinc-700 text-zinc-500 hover:border-zinc-600"
+                }`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-3">
