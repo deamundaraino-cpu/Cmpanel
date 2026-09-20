@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { cutoutFromPhoto, optimizePhoto } from "@/lib/photoProcessing";
 
-type Photo = { id: string; hasCutout: boolean };
+type Photo = { id: string; hasCutout: boolean; cover: boolean; avatar: boolean };
 
 function imageUrl(p: Photo, kind: "photo" | "cutout") {
   return `/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${kind}`;
@@ -94,6 +94,19 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
     }
   }
 
+  async function toggleFlag(p: Photo, flags: { cover?: boolean; avatar?: boolean }) {
+    setBusy(true);
+    try {
+      await api("PATCH", { id: p.id, flags });
+    } catch (err) {
+      setNotice({ ok: false, text: `⚠️ ${err instanceof Error ? err.message : "Error"}` });
+    } finally {
+      setBusy(false);
+      await reload();
+      onChanged();
+    }
+  }
+
   async function eliminar(p: Photo) {
     setBusy(true);
     await fetch(`/api/brand-photos?id=${encodeURIComponent(p.id)}`, { method: "DELETE" });
@@ -119,8 +132,8 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
       </div>
       <p className="mt-1 text-xs text-zinc-600">
         Hasta {MAX_PHOTOS} fotos tuyas de medio cuerpo, con buena luz y fondo simple. Se les quita el fondo
-        automáticamente en tu navegador y se guardan al instante (no hace falta pulsar &quot;Guardar ficha&quot;). Con
-        el estilo &quot;Con tu foto&quot;, la IA compone portadas distintas con tu figura recortada.
+        automáticamente en tu navegador y se guardan al instante (no hace falta pulsar &quot;Guardar ficha&quot;).
+        Pasa el ratón por una foto para elegir si entra en las portadas o si es la del avatar.
       </p>
 
       {status && (
@@ -134,7 +147,12 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
       {photos.length > 0 && (
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-8">
           {photos.map((p) => (
-            <div key={p.id} className="group relative aspect-[4/5] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
+            <div
+              key={p.id}
+              className={`group relative aspect-[4/5] overflow-hidden rounded-lg border bg-zinc-800 ${
+                p.cover ? "border-zinc-700" : "border-zinc-800 opacity-45"
+              }`}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imageUrl(p, p.hasCutout ? "cutout" : "photo")}
@@ -148,6 +166,11 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
               >
                 {p.hasCutout ? "Recortada" : "Sin recorte"}
               </span>
+              {p.avatar && (
+                <span className="absolute bottom-1 right-1 rounded bg-indigo-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  Avatar
+                </span>
+              )}
               <div className="absolute right-1 top-1 flex flex-col items-end gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
                 <button
                   type="button"
@@ -158,6 +181,26 @@ export default function BrandPhotos({ onChanged }: { onChanged: () => void }) {
                 >
                   ✕
                 </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFlag(p, { cover: !p.cover })}
+                  disabled={busy}
+                  title={p.cover ? "No usar en portadas" : "Usar en portadas"}
+                  className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white hover:text-indigo-300"
+                >
+                  {p.cover ? "Quitar de portadas" : "Usar en portadas"}
+                </button>
+                {!p.avatar && (
+                  <button
+                    type="button"
+                    onClick={() => toggleFlag(p, { avatar: true })}
+                    disabled={busy}
+                    title="Usar como avatar de los slides interiores"
+                    className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white hover:text-indigo-300"
+                  >
+                    Avatar
+                  </button>
+                )}
                 {!p.hasCutout && (
                   <button
                     type="button"

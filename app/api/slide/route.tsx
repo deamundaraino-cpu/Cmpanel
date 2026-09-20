@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
     total: slides.length,
     style: await buildBrandStyle(proposal.client_id, {
       coverSeed: slides[0].titulo,
+      photoId: slides[0].foto,
       needCover: index === 0,
       needAvatar: index !== 0,
     }),

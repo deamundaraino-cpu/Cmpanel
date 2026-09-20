@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { stripEmphasis } from "@/lib/emphasis";
 import ReelCoverPicker from "./ReelCoverPicker";
+import CarouselCoverPicker from "./CarouselCoverPicker";
+import type { ReelTemplate } from "@/lib/brandDesign";
 
-type Slide = { titulo: string; cuerpo: string };
+type Slide = { titulo: string; cuerpo: string; layout?: string; foto?: string };
 type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
 
 export default function ProposalCard({
@@ -20,6 +22,8 @@ export default function ProposalCard({
   quality,
   qualityNotes,
   clientFeedback,
+  reelTemplates,
+  photos,
 }: {
   id: number;
   status: string;
@@ -32,6 +36,8 @@ export default function ProposalCard({
   quality?: number | null;
   qualityNotes?: string | null;
   clientFeedback?: string | null;
+  reelTemplates: ReelTemplate[];
+  photos: { id: string; hasCutout: boolean }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -42,6 +48,7 @@ export default function ProposalCard({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [coverVersion, setCoverVersion] = useState(0);
   const isScript = formato === "guion_video";
 
   async function regenerate(text?: string) {
@@ -289,21 +296,30 @@ export default function ProposalCard({
             </div>
           ))}
 
-          <ReelCoverPicker id={id} initialTexts={beats[0]?.portadas || []} />
+          <ReelCoverPicker id={id} initialTexts={beats[0]?.portadas || []} templates={reelTemplates} photos={photos} />
         </div>
       ) : (
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-          {slides.map((_, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={`/api/slide?pid=${id}&i=${i}`}
-              alt={`Slide ${i + 1}`}
-              className="h-52 w-auto shrink-0 rounded-lg border border-zinc-800"
-              loading="lazy"
-            />
-          ))}
-        </div>
+        <>
+          <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
+            {slides.map((_, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={`/api/slide?pid=${id}&i=${i}&v=${coverVersion}`}
+                alt={`Slide ${i + 1}`}
+                className="h-52 w-auto shrink-0 rounded-lg border border-zinc-800"
+                loading="lazy"
+              />
+            ))}
+          </div>
+          <CarouselCoverPicker
+            id={id}
+            photos={photos}
+            layout={slides[0]?.layout}
+            selectedPhoto={slides[0]?.foto}
+            onChanged={() => setCoverVersion((v) => v + 1)}
+          />
+        </>
       )}
 
       <button

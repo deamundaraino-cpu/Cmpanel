@@ -1,6 +1,7 @@
 import { getSettings } from "./settings";
-import { BrandStyle, VisualStyle } from "./slide";
-import { chooseCoverPhoto, listPhotoMeta, loadPhoto } from "./brandPhotos";
+import { BrandStyle } from "./slide";
+import { DEFAULT_DESIGN, validateDesign, type BrandDesign, type VisualStyle } from "./brandDesign";
+import { chooseAvatarPhoto, chooseCoverPhoto, listPhotoMeta, loadPhoto } from "./brandPhotos";
 
 const BRIEF_KEYS = [
   "brand_name",
@@ -53,6 +54,22 @@ export async function briefCompleteness(
 
 const VALID_STYLES: VisualStyle[] = ["editorial_claro", "bold_contraste", "bold_impacto", "foto_personal"];
 
+/** ADN de diseño guardado; si la marca aún no lo tiene, el esquema por defecto. */
+export function parseDesign(raw: string | null | undefined): BrandDesign {
+  if (!raw) return DEFAULT_DESIGN;
+  try {
+    return validateDesign(JSON.parse(raw));
+  } catch {
+    return DEFAULT_DESIGN;
+  }
+}
+
+/** ADN de una marca, para las rutas que no necesitan el estilo completo. */
+export async function getBrandDesign(clientId: number): Promise<BrandDesign> {
+  const s = await getSettings(clientId, ["brand_design"]);
+  return parseDesign(s.brand_design);
+}
+
 function parseJsonStringArray(raw: string | null | undefined): string[] {
   try {
     const arr = JSON.parse(raw || "[]");
@@ -69,7 +86,7 @@ function parseJsonStringArray(raw: string | null | undefined): string[] {
  */
 export async function buildBrandStyle(
   clientId: number,
-  opts: { coverSeed?: string; needCover?: boolean; needAvatar?: boolean; forcePhotos?: boolean } = {}
+  opts: { coverSeed?: string; photoId?: string; needCover?: boolean; needAvatar?: boolean; forcePhotos?: boolean } = {}
 ): Promise<BrandStyle> {
   const s = await getSettings(clientId, [
     "brand_name",
@@ -78,8 +95,10 @@ export async function buildBrandStyle(
     "brand_color_secondary",
     "brand_colors_extra",
     "brand_visual_style",
+    "brand_design",
     "brand_logo",
   ]);
+  const design = parseDesign(s.brand_design);
   // "minimal_oscuro" ya no existe: quien lo tenía pasa a "Negro + acento".
   const visualStyle = VALID_STYLES.includes(s.brand_visual_style as VisualStyle)
     ? (s.brand_visual_style as VisualStyle)
@@ -91,6 +110,7 @@ export async function buildBrandStyle(
     secondary: s.brand_color_secondary || "#3987e5",
     extra: parseJsonStringArray(s.brand_colors_extra),
     visualStyle,
+    design,
     logo: s.brand_logo || null,
     ...(visualStyle === "foto_personal" || opts.forcePhotos ? await loadStylePhotos(clientId, opts) : {}),
   };
@@ -98,14 +118,22 @@ export async function buildBrandStyle(
 
 async function loadStylePhotos(
   clientId: number,
-  { coverSeed = "", needCover = true, needAvatar = true }: { coverSeed?: string; needCover?: boolean; needAvatar?: boolean }
+  {
+    coverSeed = "",
+    photoId,
+    needCover = true,
+    needAvatar = true,
+  }: { coverSeed?: string; photoId?: string; needCover?: boolean; needAvatar?: boolean }
 ): Promise<Pick<BrandStyle, "coverPhoto" | "avatar">> {
   const meta = await listPhotoMeta(clientId);
   if (!meta.length) return {};
-  const chosen = needCover ? chooseCoverPhoto(meta, coverSeed) : null;
+  // Foto elegida a mano para esta pieza; si no, la que toque por el título.
+  const picked = photoId && meta.some((m) => m.id === photoId) ? photoId : null;
+  const chosen = needCover ? picked || chooseCoverPhoto(meta, coverSeed)?.id || null : null;
+  const avatar = needAvatar ? chooseAvatarPhoto(meta) : null;
   const [coverPhoto, avatarPhoto] = await Promise.all([
-    chosen ? loadPhoto(clientId, chosen.id) : null,
-    needAvatar ? loadPhoto(clientId, meta[0].id) : null,
+    chosen ? loadPhoto(clientId, chosen) : null,
+    avatar ? loadPhoto(clientId, avatar.id) : null,
   ]);
   return { coverPhoto, avatar: avatarPhoto?.src || null };
 }

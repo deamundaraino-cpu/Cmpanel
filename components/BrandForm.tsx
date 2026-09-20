@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BrandPhotos from "./BrandPhotos";
+import BrandDesignPanel from "./BrandDesignPanel";
+import { COVER_LAYOUTS, VISUAL_STYLES } from "@/lib/brandDesign";
 
 type Settings = Record<string, string>;
 
@@ -23,35 +25,6 @@ const KEYS = [
   "brand_objectives",
   "content_target_per_week",
   "brand_avoid",
-];
-
-const VISUAL_STYLES = [
-  {
-    value: "foto_personal",
-    label: "Con tu foto",
-    hint: "Portadas compuestas con tu figura recortada. La IA elige la composición de cada carrusel.",
-  },
-  {
-    value: "bold_impacto",
-    label: "Negro + acento",
-    hint: "Fondo negro, titular en mayúsculas y la frase clave en tu color más vivo.",
-  },
-  {
-    value: "bold_contraste",
-    label: "Bloque de color",
-    hint: "Fondo a todo color con tu paleta y texto con contraste automático. Ideal para hooks.",
-  },
-  {
-    value: "editorial_claro",
-    label: "Editorial claro",
-    hint: "Fondo claro, texto oscuro y barra de color como firma. Look de revista.",
-  },
-];
-
-const COVER_LAYOUTS = [
-  { value: "split", label: "Split" },
-  { value: "texto_detras", label: "Texto detrás" },
-  { value: "numero", label: "Número protagonista" },
 ];
 
 function Field({
@@ -335,6 +308,8 @@ export default function BrandForm() {
             </span>
           </div>
         </div>
+
+        <BrandDesignPanel onChanged={() => setPreviewVersion((v) => v + 1)} />
 
         <BrandPhotos onChanged={() => setPreviewVersion((v) => v + 1)} />
 

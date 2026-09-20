@@ -1,0 +1,86 @@
+"use client";
+
+import { useState } from "react";
+import { COVER_LAYOUTS } from "@/lib/brandDesign";
+
+type Photo = { id: string; hasCutout: boolean };
+
+/** Elige la composición y la foto de la portada del carrusel (se guarda en la propuesta). */
+export default function CarouselCoverPicker({
+  id,
+  photos,
+  layout,
+  selectedPhoto,
+  onChanged,
+}: {
+  id: number;
+  photos: Photo[];
+  layout?: string;
+  selectedPhoto?: string;
+  onChanged: () => void;
+}) {
+  const [current, setCurrent] = useState({ layout, foto: selectedPhoto });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!photos.length) return null;
+
+  async function save(next: { layout?: string; foto?: string }) {
+    setBusy(true);
+    setError(null);
+    const merged = { ...current, ...next };
+    setCurrent(merged);
+    try {
+      const res = await fetch(`/api/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cover", ...merged }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Error");
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] text-zinc-500">Portada:</span>
+      {COVER_LAYOUTS.map((l) => (
+        <button
+          key={l.value}
+          onClick={() => save({ layout: l.value })}
+          disabled={busy}
+          title={l.hint}
+          className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+            current.layout === l.value ? "border-indigo-500 bg-indigo-500/15 text-zinc-100" : "border-zinc-700 text-zinc-500 hover:border-zinc-600"
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+      {photos.length > 1 &&
+        photos.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => save({ foto: p.id })}
+            disabled={busy}
+            className={`overflow-hidden rounded-lg border transition ${
+              current.foto === p.id ? "border-indigo-500" : "border-zinc-700 hover:border-zinc-600"
+            }`}
+            title={p.hasCutout ? "Foto recortada" : "Sin recorte"}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${p.hasCutout ? "cutout" : "photo"}`}
+              alt="Foto"
+              className="h-8 w-8 object-cover"
+            />
+          </button>
+        ))}
+      {error && <span className="text-[11px] text-red-400">{error}</span>}
+    </div>
+  );
+}

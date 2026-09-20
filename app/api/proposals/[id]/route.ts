@@ -16,6 +16,8 @@ import {
   COVER_TEXTS_INSTRUCTION,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
+import { listPhotoMeta } from "@/lib/brandPhotos";
+import { COVER_LAYOUTS } from "@/lib/brandDesign";
 import { ensurePipelineItem } from "@/lib/pipeline";
 
 export const maxDuration = 120;
@@ -48,6 +50,30 @@ export async function PATCH(
         `;
       }
       return NextResponse.json({ ok: true, token, path: `/revisar/${token}` });
+    }
+
+    // ————— Elegir la foto y la composición de la portada del carrusel —————
+    if (body.action === "cover") {
+      const rows = await sql<ProposalRow[]>`
+        SELECT * FROM proposals WHERE client_id = ${clientId} AND id = ${Number(id)}
+      `;
+      const proposal = rows[0];
+      if (!proposal?.slides || proposal.formato === "guion_video") return fail(new Error("Carrusel no encontrado"), 404);
+      const slides = JSON.parse(proposal.slides) as { titulo: string; cuerpo: string; layout?: string; foto?: string }[];
+      if (!slides[0]) return fail(new Error("El carrusel no tiene portada"), 400);
+
+      if (typeof body.foto === "string") {
+        const meta = await listPhotoMeta(clientId);
+        if (!meta.some((m) => m.id === body.foto)) return fail(new Error("Foto no encontrada"), 400);
+        slides[0].foto = body.foto;
+      }
+      if (COVER_LAYOUTS.some((l) => l.value === body.layout)) slides[0].layout = body.layout;
+
+      await sql`
+        UPDATE proposals SET slides = ${JSON.stringify(slides)}
+        WHERE client_id = ${clientId} AND id = ${Number(id)}
+      `;
+      return NextResponse.json({ ok: true });
     }
 
     // ————— Regenerar con feedback (del editor o del cliente) —————

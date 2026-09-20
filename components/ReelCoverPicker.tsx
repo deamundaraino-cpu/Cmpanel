@@ -2,21 +2,28 @@
 
 import { useState } from "react";
 import { stripEmphasis } from "@/lib/emphasis";
+import { REEL_TEMPLATES, type ReelTemplate } from "@/lib/brandDesign";
 
-// Mismo orden que REEL_TEMPLATES en lib/reelCover.tsx (ese módulo es solo de servidor).
-const TEMPLATES = [
-  { value: "centro", label: "Bloque central" },
-  { value: "arriba", label: "Titular arriba" },
-  { value: "circulo", label: "Círculo" },
-  { value: "cintas", label: "Cintas" },
-  { value: "cita", label: "Cita" },
-  { value: "split", label: "Bloque de color" },
-  { value: "detras", label: "Texto detrás" },
-];
+type Photo = { id: string; hasCutout: boolean };
 
-export default function ReelCoverPicker({ id, initialTexts }: { id: number; initialTexts: string[] }) {
+export default function ReelCoverPicker({
+  id,
+  initialTexts,
+  templates,
+  photos,
+}: {
+  id: number;
+  initialTexts: string[];
+  templates: ReelTemplate[];
+  photos: Photo[];
+}) {
+  // El esquema de la marca decide qué plantillas se ofrecen y en qué orden.
+  const TEMPLATES = templates
+    .map((t) => REEL_TEMPLATES.find((r) => r.value === t))
+    .filter((t): t is (typeof REEL_TEMPLATES)[number] => !!t);
   const [texts, setTexts] = useState<string[]>(initialTexts);
   const [offsets, setOffsets] = useState<number[]>(TEMPLATES.map(() => 0));
+  const [photo, setPhoto] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
   const [applied, setApplied] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,6 +55,7 @@ export default function ReelCoverPicker({ id, initialTexts }: { id: number; init
     const t = textFor(i);
     const qs = new URLSearchParams({ t: TEMPLATES[i].value, k: String(i) });
     if (t) qs.set("texto", t);
+    if (photo) qs.set("photo", photo);
     if (download) qs.set("download", "1");
     return `/api/proposals/${id}/portada?${qs}`;
   }
@@ -86,6 +94,36 @@ export default function ReelCoverPicker({ id, initialTexts }: { id: number; init
           </button>
         )}
       </div>
+      {photos.length > 1 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-zinc-500">Foto:</span>
+          <button
+            onClick={() => setPhoto(null)}
+            className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+              photo === null ? "border-indigo-500 bg-indigo-500/15 text-zinc-100" : "border-zinc-700 text-zinc-500"
+            }`}
+          >
+            Automática
+          </button>
+          {photos.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPhoto(p.id)}
+              className={`overflow-hidden rounded-lg border transition ${
+                photo === p.id ? "border-indigo-500" : "border-zinc-700 hover:border-zinc-600"
+              }`}
+              title={p.hasCutout ? "Foto recortada" : "Sin recorte"}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${p.hasCutout ? "cutout" : "photo"}`}
+                alt="Foto"
+                className="h-10 w-10 object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
       {error && <p className="mt-1.5 text-xs text-red-400">{error}</p>}
       {!texts.length && !applied && (
         <p className="mt-1.5 text-[11px] text-zinc-600">

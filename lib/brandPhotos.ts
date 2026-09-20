@@ -11,7 +11,8 @@ export const MAX_PHOTOS = 8;
 export const MAX_PHOTO_CHARS = 900_000;
 export const MAX_CUTOUT_CHARS = 3_500_000;
 
-export type PhotoMeta = { id: string; hasCutout: boolean };
+export type PhotoFlags = { cover: boolean; avatar: boolean };
+export type PhotoMeta = { id: string; hasCutout: boolean } & PhotoFlags;
 
 function parseIds(raw: string | null): string[] {
   try {
@@ -19,6 +20,15 @@ function parseIds(raw: string | null): string[] {
     return Array.isArray(arr) ? arr.filter((v) => typeof v === "string") : [];
   } catch {
     return [];
+  }
+}
+
+function parseFlags(raw: string | null): Record<string, Partial<PhotoFlags>> {
+  try {
+    const f = JSON.parse(raw || "{}");
+    return f && typeof f === "object" ? f : {};
+  } catch {
+    return {};
   }
 }
 
@@ -63,9 +73,10 @@ async function migrateLegacy(clientId: number): Promise<string[]> {
 }
 
 export async function listPhotoMeta(clientId: number): Promise<PhotoMeta[]> {
-  const { brand_photo_ids } = await getSettings(clientId, ["brand_photo_ids"]);
+  const { brand_photo_ids, brand_photo_flags } = await getSettings(clientId, ["brand_photo_ids", "brand_photo_flags"]);
   const ids = brand_photo_ids === null ? await migrateLegacy(clientId) : parseIds(brand_photo_ids);
   if (!ids.length) return [];
+  const flags = parseFlags(brand_photo_flags);
   const sql = getSql();
   const rows = await sql<{ key: string }[]>`
     SELECT key FROM settings
@@ -75,7 +86,31 @@ export async function listPhotoMeta(clientId: number): Promise<PhotoMeta[]> {
   const keys = new Set(rows.map((r) => r.key));
   return ids
     .filter((id) => keys.has(`brand_photo_${id}`))
-    .map((id) => ({ id, hasCutout: keys.has(`brand_cutout_${id}`) }));
+    .map((id) => ({
+      id,
+      hasCutout: keys.has(`brand_cutout_${id}`),
+      // Por defecto toda foto sirve para portadas; el avatar se marca a mano.
+      cover: flags[id]?.cover !== false,
+      avatar: flags[id]?.avatar === true,
+    }));
+}
+
+export async function setPhotoFlags(clientId: number, id: string, next: Partial<PhotoFlags>): Promise<void> {
+  const meta = await listPhotoMeta(clientId);
+  if (!meta.some((p) => p.id === id)) throw new Error("Foto no encontrada");
+  const flags: Record<string, Partial<PhotoFlags>> = {};
+  for (const p of meta) {
+    const cover = p.id === id && next.cover !== undefined ? next.cover : p.cover;
+    // El avatar es uno solo: marcar una desmarca las demás.
+    const avatar = next.avatar === true ? p.id === id : p.id === id && next.avatar === false ? false : p.avatar;
+    flags[p.id] = { cover, avatar };
+  }
+  await setSetting(clientId, "brand_photo_flags", JSON.stringify(flags));
+}
+
+/** Foto del avatar de los slides interiores: la marcada, o la primera disponible. */
+export function chooseAvatarPhoto(meta: PhotoMeta[]): PhotoMeta | null {
+  return meta.find((m) => m.avatar) || meta.find((m) => m.cover) || meta[0] || null;
 }
 
 export async function loadPhoto(clientId: number, id: string): Promise<BrandPhoto | null> {
@@ -90,9 +125,10 @@ export async function loadPhoto(clientId: number, id: string): Promise<BrandPhot
  * Prioriza fotos con recorte, que son las que permiten composiciones.
  */
 export function chooseCoverPhoto(meta: PhotoMeta[], seed: string): PhotoMeta | null {
-  const withCutout = meta.filter((m) => m.hasCutout);
-  const pool = withCutout.length ? withCutout : meta;
-  return pool.length ? pool[hashString(seed) % pool.length] : null;
+  const usable = meta.filter((m) => m.cover);
+  const pool = usable.filter((m) => m.hasCutout).length ? usable.filter((m) => m.hasCutout) : usable;
+  const fallback = pool.length ? pool : meta;
+  return fallback.length ? fallback[hashString(seed) % fallback.length] : null;
 }
 
 export async function addBrandPhoto(clientId: number, src: string, cutout: Cutout | null): Promise<string> {

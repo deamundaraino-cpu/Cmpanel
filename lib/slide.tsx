@@ -2,38 +2,58 @@ import { ImageResponse } from "next/og";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEmphasis, stripEmphasis } from "./emphasis";
+import { BrandDesign, COVER_LAYOUTS, DEFAULT_DESIGN, FONT_PAIRS, type CoverLayout, type VisualStyle } from "./brandDesign";
 
-type FontDef = { name: string; data: Buffer; weight: 400 | 500 | 800 | 900; style: "normal" };
-let fontCache: FontDef[] | null = null;
+export { COVER_LAYOUTS, VISUAL_STYLES } from "./brandDesign";
+export type { CoverLayout, VisualStyle } from "./brandDesign";
 
-export function fonts(): FontDef[] {
-  if (!fontCache) {
-    const f = (file: string) => readFileSync(join(process.cwd(), "assets/fonts", file));
-    fontCache = [
-      { name: "Inter", data: f("inter-latin-500-normal.woff"), weight: 500, style: "normal" },
-      { name: "Inter", data: f("inter-latin-800-normal.woff"), weight: 800, style: "normal" },
-      { name: "Inter", data: f("inter-latin-900-normal.woff"), weight: 900, style: "normal" },
-      { name: "Anton", data: f("anton-latin-400-normal.woff"), weight: 400, style: "normal" },
-    ];
-  }
-  return fontCache;
+type FontDef = { name: string; data: Buffer; weight: 400 | 500 | 700 | 800 | 900; style: "normal" };
+const fontCache = new Map<string, FontDef[]>();
+
+/** Solo las fuentes de la pareja elegida por la marca: cada una que se pasa, Satori la parsea. */
+export function fonts(design: BrandDesign): FontDef[] {
+  const cached = fontCache.get(design.fontPair);
+  if (cached) return cached;
+  const f = (file: string) => readFileSync(join(process.cwd(), "assets/fonts", file));
+  const pair = FONT_PAIRS[design.fontPair] || FONT_PAIRS[DEFAULT_DESIGN.fontPair];
+  const defs: FontDef[] = [
+    { name: pair.display.family, data: f(pair.display.file), weight: 400, style: "normal" },
+    ...pair.body.files.map((b) => ({ name: pair.body.family, data: f(b.file), weight: b.weight, style: "normal" as const })),
+  ];
+  fontCache.set(design.fontPair, defs);
+  return defs;
 }
 
-export const DISPLAY = "Anton";
+/** Perillas de marca resueltas, listas para el render. */
+export function designOf(style: BrandStyle): BrandDesign {
+  return style.design || DEFAULT_DESIGN;
+}
+
+export function pairOf(style: BrandStyle) {
+  const d = designOf(style);
+  return FONT_PAIRS[d.fontPair] || FONT_PAIRS[DEFAULT_DESIGN.fontPair];
+}
+
+/** Mayúsculas o frase normal, según el ADN de la marca. */
+function cased(text: string, style: BrandStyle): string {
+  return designOf(style).textCase === "upper" ? text.toUpperCase() : text;
+}
+
+function radius(style: BrandStyle, soft: number): number {
+  return designOf(style).shape === "sharp" ? 0 : soft;
+}
+
+/** Fondo base del lienzo según el ADN: plano, halo tras la figura o degradado. */
+function canvasBg(style: BrandStyle, theme: Theme, at = "50% 62%"): string {
+  const d = designOf(style);
+  if (d.background === "flat") return theme.dark;
+  if (d.background === "degradado") return `linear-gradient(160deg, ${mix(theme.dark, theme.accent, 0.35)} 0%, ${theme.dark} 55%)`;
+  return `radial-gradient(circle at ${at}, ${mix(theme.dark, theme.accent, 0.26)} 0%, ${theme.dark} 60%)`;
+}
 
 export { parseEmphasis, stripEmphasis };
 
-export type CoverLayout = "split" | "texto_detras" | "numero";
-
-export const COVER_LAYOUTS: { value: CoverLayout; label: string; hint: string }[] = [
-  { value: "split", label: "Split", hint: "Bloque de color con el titular y tu figura saliendo del borde." },
-  { value: "texto_detras", label: "Texto detrás", hint: "La palabra clave gigante y tu figura delante." },
-  { value: "numero", label: "Número protagonista", hint: "Un número enorme con tu figura encima. Para títulos tipo lista." },
-];
-
-export type Slide = { titulo: string; cuerpo: string; layout?: CoverLayout };
-
-export type VisualStyle = "editorial_claro" | "bold_contraste" | "bold_impacto" | "foto_personal";
+export type Slide = { titulo: string; cuerpo: string; layout?: CoverLayout; foto?: string };
 
 export type Cutout = { src: string; w: number; h: number };
 export type BrandPhoto = { src: string; cutout?: Cutout | null };
@@ -47,31 +67,9 @@ export type BrandStyle = {
   coverPhoto?: BrandPhoto | null; // foto elegida para la portada de este carrusel (con recorte si existe)
   avatar?: string | null; // foto para el avatar de los slides interiores
   visualStyle: VisualStyle;
+  design?: BrandDesign; // esquema visual de la marca (tipografía, resaltados, formas)
   logo?: string | null; // data URI, opcional
 };
-
-export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[] = [
-  {
-    value: "foto_personal",
-    label: "Con tu foto",
-    hint: "Portadas compuestas con tu figura recortada (split, texto detrás, número). La IA elige la composición de cada carrusel.",
-  },
-  {
-    value: "bold_impacto",
-    label: "Negro + acento",
-    hint: "Fondo negro, titular en mayúsculas y la frase clave en tu color más vivo. Portadas con variaciones automáticas.",
-  },
-  {
-    value: "bold_contraste",
-    label: "Bloque de color",
-    hint: "Fondo a todo color con tu paleta y texto con contraste automático. Máximo impacto para hooks.",
-  },
-  {
-    value: "editorial_claro",
-    label: "Editorial claro",
-    hint: "Fondo claro, texto oscuro y barra de color como firma. Look de revista.",
-  },
-];
 
 const W = 1080;
 const H = 1350;
@@ -258,9 +256,9 @@ function EmphasisText({
       style={{
         display: "flex",
         flexWrap: "wrap",
-        columnGap: size * (family === DISPLAY ? 0.2 : 0.26),
+        columnGap: size * (family ? 0.2 : 0.26),
         fontSize: size,
-        fontWeight: family === DISPLAY ? 400 : weight,
+        fontWeight: family ? 400 : weight,
         lineHeight,
         ...(family ? { fontFamily: family } : {}),
       }}
@@ -290,26 +288,36 @@ function pickCoverVariant(titulo: string): CoverVariant {
   return variant === "insignia" && !tieneNumeroInicial ? "banda" : variant;
 }
 
-function renderTitleBanda(words: Word[], accent: string, size: number, color = "#ffffff") {
+function renderTitleBanda(words: Word[], accent: string, size: number, style: BrandStyle, color = "#ffffff") {
+  const emphasis = designOf(style).emphasis;
+  const family = pairOf(style).display.family;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", rowGap: 14, columnGap: 12 }}>
-      {toChunks(words).map((w, i) => (
-        <div
-          key={i}
-          style={{
-            display: "flex",
-            fontSize: size,
-            fontWeight: 900,
-            lineHeight: 1.05,
-            color: w.strong ? contrastText(accent) : color,
-            background: w.strong ? accent : "transparent",
-            padding: w.strong ? "4px 16px" : "4px 0",
-            borderRadius: w.strong ? 10 : 0,
-          }}
-        >
-          {w.text}
-        </div>
-      ))}
+    <div style={{ display: "flex", flexWrap: "wrap", rowGap: 14, columnGap: size * 0.2 }}>
+      {toChunks(words).map((w, i) => {
+        const boxed = w.strong && emphasis === "box";
+        return (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              fontFamily: family,
+              fontSize: size,
+              lineHeight: 1.05,
+              color: boxed ? contrastText(accent) : w.strong ? accent : color,
+              background: boxed ? accent : "transparent",
+              padding: boxed ? `4px ${Math.round(size * 0.14)}px 0` : "4px 0",
+              borderRadius: boxed ? radius(style, Math.round(size * 0.08)) : 0,
+            }}
+          >
+            {w.text}
+            {w.strong && emphasis === "underline" ? (
+              <div style={{ display: "flex", width: "100%", height: Math.max(6, size * 0.09), marginTop: size * 0.04, background: accent }} />
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -403,13 +411,13 @@ function renderTitleCita(words: Word[], accent: string, size: number) {
   );
 }
 
-function renderCoverTitle(titulo: string, variant: CoverVariant, accent: string, size: number) {
-  const upper = titulo.toUpperCase();
-  const words = toWords(parseEmphasis(upper));
-  if (variant === "insignia") return renderTitleInsignia(upper, accent, size);
+function renderCoverTitle(titulo: string, variant: CoverVariant, accent: string, size: number, style: BrandStyle) {
+  const text = cased(titulo, style);
+  const words = toWords(parseEmphasis(text));
+  if (variant === "insignia") return renderTitleInsignia(text, accent, size);
   if (variant === "subrayado") return renderTitleSubrayado(words, accent, size);
   if (variant === "cita") return renderTitleCita(words, accent, size);
-  return renderTitleBanda(words, accent, size);
+  return renderTitleBanda(words, accent, size, style);
 }
 
 // ————— Estilos de carrusel —————
@@ -498,7 +506,7 @@ function renderBoldContraste(slide: Slide, index: number, total: number, style: 
         padding: 72,
         background: `linear-gradient(155deg, ${bgFrom} 0%, ${bgFrom} 45%, ${bgTo} 100%)`,
         color: text,
-        fontFamily: "Inter",
+        fontFamily: pairOf(style).body.family,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -585,7 +593,7 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
   const accent = isCover ? theme.accent : pickFrom(theme.vivid, slide.titulo || index, index);
   const variant = isCover ? pickCoverVariant(slide.titulo) : "banda";
   const size = isCover ? titleSize(slide.titulo, 76, 58, 92) : titleSize(slide.titulo, 54, 42, 64);
-  const words = toWords(parseEmphasis(slide.titulo.toUpperCase()));
+  const words = toWords(parseEmphasis(cased(slide.titulo, style)));
 
   return (
     <div
@@ -596,9 +604,9 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
         flexDirection: "column",
         justifyContent: "space-between",
         padding: 72,
-        background: theme.dark,
+        background: canvasBg(style, theme),
         color: "#ffffff",
-        fontFamily: "Inter",
+        fontFamily: pairOf(style).body.family,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -632,7 +640,7 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        {isCover ? renderCoverTitle(slide.titulo, variant, accent, size) : renderTitleBanda(words, accent, size)}
+        {isCover ? renderCoverTitle(slide.titulo, variant, accent, size, style) : renderTitleBanda(words, accent, size, style)}
         {slide.cuerpo ? (
           <div style={{ display: "flex", fontSize: 36, lineHeight: 1.45, color: "rgba(255,255,255,0.78)" }}>
             {slide.cuerpo}
@@ -746,7 +754,7 @@ function CoverFooter({ style, theme, total }: { style: BrandStyle; theme: Theme;
 }
 
 function coverTextoDetras(slide: Slide, total: number, style: BrandStyle, theme: Theme, fig: Figure) {
-  const keyword = keywordOf(slide.titulo).toUpperCase();
+  const keyword = cased(keywordOf(slide.titulo), style);
   const kwSize = Math.floor(clamp(960 / (Math.max(keyword.length, 3) * 0.56), 150, 400));
   const box = figureBox(fig.cutout, 1040, 980);
   const size = titleSize(slide.titulo, 88, 66, 104);
@@ -758,15 +766,15 @@ function coverTextoDetras(slide: Slide, total: number, style: BrandStyle, theme:
         display: "flex",
         position: "relative",
         overflow: "hidden",
-        fontFamily: "Inter",
-        background: `radial-gradient(circle at 50% 55%, ${mix(theme.dark, theme.accent, 0.28)} 0%, ${theme.dark} 62%)`,
+        fontFamily: pairOf(style).body.family,
+        background: canvasBg(style, theme, "50% 55%"),
       }}
     >
       <div style={{ position: "absolute", top: 64, left: 72, display: "flex", fontSize: 28, fontWeight: 800, color: alpha("#ffffff", 0.85) }}>
         {style.brandName}
       </div>
       <div style={{ position: "absolute", top: 150, left: 0, width: W, display: "flex", justifyContent: "center" }}>
-        <div style={{ display: "flex", fontFamily: DISPLAY, fontSize: kwSize, lineHeight: 1, color: theme.accent }}>
+        <div style={{ display: "flex", fontFamily: pairOf(style).display.family, fontSize: kwSize, lineHeight: 1, color: theme.accent }}>
           {keyword}
         </div>
       </div>
@@ -783,7 +791,7 @@ function coverTextoDetras(slide: Slide, total: number, style: BrandStyle, theme:
         }}
       />
       <div style={{ position: "absolute", left: 72, top: H - 400, width: W - 144, height: 270, display: "flex", alignItems: "flex-end" }}>
-        <EmphasisText text={slide.titulo} size={size} color="#ffffff" strongColor={theme.accent} lineHeight={1.02} upper family={DISPLAY} />
+        <EmphasisText text={cased(slide.titulo, style)} size={size} color="#ffffff" strongColor={theme.accent} lineHeight={1.02} family={pairOf(style).display.family} />
       </div>
       <CoverFooter style={style} theme={theme} total={total} />
     </div>
@@ -795,7 +803,7 @@ function coverSplit(slide: Slide, total: number, style: BrandStyle, theme: Theme
   const box = figureBox(fig.cutout, 1180, 760);
   const left = Math.max(panelW - 60, Math.round(840 - box.w / 2));
   const onAccent = contrastText(theme.accent);
-  const words = toWords(parseEmphasis(slide.titulo.toUpperCase()));
+  const words = toWords(parseEmphasis(cased(slide.titulo, style)));
   const size = titleSize(slide.titulo, 96, 70, 118);
   return (
     <div
@@ -805,8 +813,8 @@ function coverSplit(slide: Slide, total: number, style: BrandStyle, theme: Theme
         display: "flex",
         position: "relative",
         overflow: "hidden",
-        fontFamily: "Inter",
-        background: `radial-gradient(circle at 78% 45%, ${mix(theme.dark, theme.accent2, 0.3)} 0%, ${theme.dark} 60%)`,
+        fontFamily: pairOf(style).body.family,
+        background: canvasBg(style, theme, "78% 45%"),
       }}
     >
       <div
@@ -833,13 +841,13 @@ function coverSplit(slide: Slide, total: number, style: BrandStyle, theme: Theme
               key={i}
               style={{
                 display: "flex",
-                fontFamily: DISPLAY,
+                fontFamily: pairOf(style).display.family,
                 fontSize: size,
                 lineHeight: 1.04,
                 color: w.strong ? theme.accent : onAccent,
-                background: w.strong ? theme.dark : "transparent",
-                padding: w.strong ? "2px 14px" : "2px 0",
-                borderRadius: w.strong ? 8 : 0,
+                background: w.strong && designOf(style).emphasis === "box" ? theme.dark : "transparent",
+                padding: w.strong && designOf(style).emphasis === "box" ? `2px ${Math.round(size * 0.12)}px` : "2px 0",
+                borderRadius: radius(style, 8),
               }}
             >
               {w.text}
@@ -882,7 +890,7 @@ function coverNumero(slide: Slide, total: number, style: BrandStyle, theme: Them
         display: "flex",
         position: "relative",
         overflow: "hidden",
-        fontFamily: "Inter",
+        fontFamily: pairOf(style).body.family,
         background: theme.dark,
       }}
     >
@@ -892,7 +900,7 @@ function coverNumero(slide: Slide, total: number, style: BrandStyle, theme: Them
           left: 10,
           top: -90,
           display: "flex",
-          fontFamily: DISPLAY,
+          fontFamily: pairOf(style).display.family,
           fontSize: numSize,
           lineHeight: 1,
           color: theme.accent,
@@ -928,7 +936,7 @@ function coverNumero(slide: Slide, total: number, style: BrandStyle, theme: Them
         }}
       />
       <div style={{ position: "absolute", left: 72, top: H - 400, width: W - 144, height: 270, display: "flex", alignItems: "flex-end" }}>
-        <EmphasisText text={num.resto} size={size} color="#ffffff" strongColor={theme.accent} lineHeight={1.02} upper family={DISPLAY} />
+        <EmphasisText text={cased(num.resto, style)} size={size} color="#ffffff" strongColor={theme.accent} lineHeight={1.02} family={pairOf(style).display.family} />
       </div>
       <CoverFooter style={style} theme={theme} total={total} />
     </div>
@@ -939,7 +947,7 @@ function coverNumero(slide: Slide, total: number, style: BrandStyle, theme: Them
 function coverFotoFondo(slide: Slide, total: number, style: BrandStyle, theme: Theme, photo: BrandPhoto) {
   const size = titleSize(slide.titulo, 72, 54, 88);
   return (
-    <div style={{ width: W, height: H, display: "flex", position: "relative", fontFamily: "Inter", background: theme.dark }}>
+    <div style={{ width: W, height: H, display: "flex", position: "relative", fontFamily: pairOf(style).body.family, background: theme.dark }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={photo.src}
@@ -962,7 +970,7 @@ function coverFotoFondo(slide: Slide, total: number, style: BrandStyle, theme: T
         {style.brandName}
       </div>
       <div style={{ position: "absolute", left: 72, top: H - 520, width: W - 144, height: 390, display: "flex", alignItems: "flex-end" }}>
-        {renderTitleBanda(toWords(parseEmphasis(slide.titulo.toUpperCase())), theme.accent, size)}
+        {renderTitleBanda(toWords(parseEmphasis(cased(slide.titulo, style))), theme.accent, size, style)}
       </div>
       <CoverFooter style={style} theme={theme} total={total} />
     </div>
@@ -993,5 +1001,5 @@ export function renderSlide(opts: { slide: Slide; index: number; total: number; 
           ? renderBoldContraste(slide, index, total, style)
           : renderBoldImpacto(slide, index, total, style);
 
-  return new ImageResponse(tree, { width: W, height: H, fonts: fonts() });
+  return new ImageResponse(tree, { width: W, height: H, fonts: fonts(designOf(style)) });
 }

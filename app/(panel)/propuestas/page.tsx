@@ -1,15 +1,23 @@
 import { getSql, ProposalRow } from "@/lib/db";
 import { requireClient } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
+import { getBrandDesign } from "@/lib/brand";
+import { listPhotoMeta } from "@/lib/brandPhotos";
+import { orderedReelTemplates } from "@/lib/brandDesign";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProposalsPage() {
   const { clientId } = await requireClient();
   const sql = getSql();
-  const proposals = await sql<ProposalRow[]>`
-    SELECT * FROM proposals WHERE client_id = ${clientId} ORDER BY id DESC
-  `;
+  const [proposals, design, photos] = await Promise.all([
+    sql<ProposalRow[]>`SELECT * FROM proposals WHERE client_id = ${clientId} ORDER BY id DESC`,
+    getBrandDesign(clientId),
+    listPhotoMeta(clientId),
+  ]);
+  // Las plantillas se muestran en el orden que el esquema de la marca prefiere.
+  const reelTemplates = orderedReelTemplates(design);
+  const coverPhotos = photos.filter((p) => p.cover).map(({ id, hasCutout }) => ({ id, hasCutout }));
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -33,6 +41,8 @@ export default async function ProposalsPage() {
               formato={p.formato || "carrusel"}
               slides={isScript ? [] : parsed}
               beats={isScript ? parsed : []}
+              reelTemplates={reelTemplates}
+              photos={coverPhotos}
               caption={p.caption || ""}
               hashtags={p.hashtags ? JSON.parse(p.hashtags) : []}
               quality={p.quality}

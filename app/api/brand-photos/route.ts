@@ -6,6 +6,7 @@ import {
   listPhotoMeta,
   loadPhoto,
   setBrandCutout,
+  setPhotoFlags,
   MAX_CUTOUT_CHARS,
   MAX_PHOTO_CHARS,
 } from "@/lib/brandPhotos";
@@ -55,13 +56,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/** Guarda el recorte de una foto, o sus marcas (si sirve para portadas / si es el avatar). */
 export async function PATCH(req: NextRequest) {
   const auth = await guardClient();
   if (auth instanceof NextResponse) return auth;
   try {
     const body = await req.json();
+    if (typeof body.id !== "string") return fail(new Error("Falta id"), 400);
+
+    if (body.flags && typeof body.flags === "object") {
+      const { cover, avatar } = body.flags as { cover?: unknown; avatar?: unknown };
+      await setPhotoFlags(auth.clientId, body.id, {
+        ...(typeof cover === "boolean" ? { cover } : {}),
+        ...(typeof avatar === "boolean" ? { avatar } : {}),
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     const cutout = toCutout(body.cutout);
-    if (typeof body.id !== "string" || !cutout) return fail(new Error("Recorte inválido."), 400);
+    if (!cutout) return fail(new Error("Recorte inválido."), 400);
     await setBrandCutout(auth.clientId, body.id, cutout);
     return NextResponse.json({ ok: true });
   } catch (e) {

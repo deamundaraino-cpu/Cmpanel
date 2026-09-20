@@ -6,7 +6,8 @@ import { listPhotoMeta, loadPhoto } from "@/lib/brandPhotos";
 import { chatJson } from "@/lib/llm";
 import { COVER_TEXTS_INSTRUCTION, sanitizeCoverTexts } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
-import { fallbackCoverText, REEL_TEMPLATES, renderReelCover } from "@/lib/reelCover";
+import { REEL_TEMPLATES } from "@/lib/brandDesign";
+import { fallbackCoverText, renderReelCover } from "@/lib/reelCover";
 
 export const maxDuration = 60;
 
@@ -38,11 +39,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const texts = hook?.portadas?.length ? hook.portadas : [fallbackCoverText(hook?.texto || script.proposal.caption || "Mira esto")];
   const text = (sp.get("texto") || "").trim().slice(0, 90) || texts[k % texts.length];
 
-  // Cada plantilla usa una foto distinta si hay varias; las que componen con recorte priorizan fotos recortadas.
-  const meta = await listPhotoMeta(auth.clientId);
+  // Foto elegida a mano, o rotación entre las marcadas para portadas (las que
+  // componen con recorte priorizan las recortadas).
+  const meta = (await listPhotoMeta(auth.clientId)).filter((m) => m.cover);
+  const requested = sp.get("photo");
   const withCutout = meta.filter((m) => m.hasCutout);
   const pool = template.needsCutout && withCutout.length ? withCutout : meta;
-  const chosen = pool.length ? pool[(templateIndex + k) % pool.length] : null;
+  const chosen = meta.find((m) => m.id === requested) || (pool.length ? pool[(templateIndex + k) % pool.length] : null);
 
   const [style, photo] = await Promise.all([
     buildBrandStyle(auth.clientId, { needCover: false, needAvatar: false }),
