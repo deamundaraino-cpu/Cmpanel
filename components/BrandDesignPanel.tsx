@@ -19,6 +19,7 @@ const KNOBS: { key: keyof typeof DESIGN_OPTIONS; label: string }[] = [
   { key: "emphasis", label: "Frase clave" },
   { key: "shape", label: "Esquinas" },
   { key: "background", label: "Fondo" },
+  { key: "texture", label: "Grafismo" },
   { key: "align", label: "Alineación" },
 ];
 

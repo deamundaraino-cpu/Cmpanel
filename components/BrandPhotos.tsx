@@ -6,7 +6,8 @@ import { cutoutFromPhoto, optimizePhoto } from "@/lib/photoProcessing";
 type Photo = { id: string; hasCutout: boolean; cover: boolean; avatar: boolean; bg: boolean };
 
 function imageUrl(p: Photo, kind: "photo" | "cutout") {
-  return `/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${kind}`;
+  // El recorte se regenera con el mismo id: la URL cambia para no ver el anterior.
+  return `/api/brand-photos?id=${encodeURIComponent(p.id)}&kind=${kind}&v=${p.hasCutout ? 1 : 0}`;
 }
 
 const MAX_PHOTOS = 8;

@@ -88,6 +88,8 @@ export const FONT_PAIRS: Record<
   },
 };
 
+import { TEXTURES, type TextureKind } from "./texture";
+
 export type VisualStyle = "editorial_claro" | "bold_contraste" | "bold_impacto" | "foto_personal";
 
 export const VISUAL_STYLES: { value: VisualStyle; label: string; hint: string }[] = [
@@ -177,6 +179,7 @@ export type BrandDesign = {
   emphasis: "box" | "color" | "underline";
   shape: "sharp" | "soft";
   background: "flat" | "halo" | "degradado";
+  texture: TextureKind;
   align: "left" | "center";
   tilt: boolean;
   visualStyle: VisualStyle;
@@ -191,6 +194,7 @@ export const DEFAULT_DESIGN: BrandDesign = {
   emphasis: "box",
   shape: "soft",
   background: "halo",
+  texture: "puntos",
   align: "center",
   tilt: true,
   visualStyle: "foto_personal",
@@ -204,6 +208,7 @@ export const DESIGN_OPTIONS = {
   emphasis: ["box", "color", "underline"] as const,
   shape: ["sharp", "soft"] as const,
   background: ["flat", "halo", "degradado"] as const,
+  texture: TEXTURES.map((t) => t.value),
   align: ["left", "center"] as const,
 };
 
@@ -212,6 +217,7 @@ export const DESIGN_LABELS: Record<string, Record<string, string>> = {
   emphasis: { box: "Caja de color", color: "Solo color", underline: "Subrayado" },
   shape: { sharp: "Esquinas rectas", soft: "Esquinas redondeadas" },
   background: { flat: "Plano", halo: "Halo de color", degradado: "Degradado" },
+  texture: Object.fromEntries(TEXTURES.map((t) => [t.value, t.label])),
   align: { left: "Izquierda", center: "Centrado" },
 };
 
@@ -257,6 +263,7 @@ export function validateDesign(raw: unknown): BrandDesign {
     emphasis,
     shape: pick(d.shape, DESIGN_OPTIONS.shape, DEFAULT_DESIGN.shape),
     background: pick(d.background, DESIGN_OPTIONS.background, DEFAULT_DESIGN.background),
+    texture: pick(d.texture, DESIGN_OPTIONS.texture, DEFAULT_DESIGN.texture),
     align: pick(d.align, DESIGN_OPTIONS.align, DEFAULT_DESIGN.align),
     tilt,
     visualStyle: pick(d.visualStyle, VISUAL_STYLES.map((v) => v.value), DEFAULT_DESIGN.visualStyle),
@@ -280,7 +287,7 @@ export function brandReelTemplates(design: BrandDesign): ReelTemplate[] {
 }
 
 export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha de marca, elige el esquema visual con el que se generarán sus carruseles y portadas de reel. Devuelve SOLO JSON:
-{"fontPair": "...", "textCase": "...", "emphasis": "...", "shape": "...", "background": "...", "align": "...", "tilt": true, "visualStyle": "...", "reelTemplates": ["...", "..."], "coverLayouts": ["...", "..."], "notes": "..."}
+{"fontPair": "...", "textCase": "...", "emphasis": "...", "shape": "...", "background": "...", "texture": "...", "align": "...", "tilt": true, "visualStyle": "...", "reelTemplates": ["...", "..."], "coverLayouts": ["...", "..."], "notes": "..."}
 
 - fontPair (pareja tipográfica): ${Object.entries(FONT_PAIRS)
   .map(([k, v]) => `"${k}" = ${v.vibe}`)
@@ -289,6 +296,7 @@ export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha d
 - emphasis, cómo se destaca la frase clave: "box" (caja de color, máximo grito), "color" (solo el color del acento, sobrio), "underline" (subrayado, discreto y editorial).
 - shape: "sharp" (esquinas rectas, técnico/serio) o "soft" (redondeadas, cercano).
 - background: "flat" (color plano, austero), "halo" (halo de color tras la persona, dramático), "degradado" (degradado de marca, comercial).
+- texture, el grafismo del fondo: ${TEXTURES.map((t) => `"${t.value}" (${t.hint})`).join(" | ")}. Da profundidad sin ruido; usa "none" solo si la marca es de blanco absoluto.
 - align: "left" (editorial, lectura pausada) o "center" (impacto, redes).
 - tilt: true solo si a la marca le encaja lo desenfadado (elementos girados, cintas); false para marcas serias.
 - visualStyle, el estilo base del carrusel: "foto_personal" (portadas con la figura recortada), "bold_impacto" (fondo oscuro), "bold_contraste" (bloque de color), "editorial_claro" (fondo claro tipo revista).

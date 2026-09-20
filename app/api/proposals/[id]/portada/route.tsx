@@ -66,6 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       headers: {
         "Content-Type": "image/png",
         "Content-Disposition": `attachment; filename="portada-${id}-${template.value}.png"`,
+        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
       },
     });
   }

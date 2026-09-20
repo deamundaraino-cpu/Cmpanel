@@ -62,6 +62,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Todo lo que sirve el panel depende del cliente activo: ni el navegador ni
+  // el CDN deben reutilizarlo entre cargas o entre marcas. Se excluyen las
+  // fotos de marca, que pesan megas y ya fijan su propia caché privada corta.
+  if (!path.startsWith("/api/brand-photos")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  }
   return response;
 }
 

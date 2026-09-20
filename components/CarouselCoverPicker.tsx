@@ -130,7 +130,7 @@ export default function CarouselCoverPicker({
           {l.label}
         </button>
       ))}
-      {photos.length > 1 &&
+      {photos.length > 0 &&
         photos.map((p) => (
           <button
             key={p.id}

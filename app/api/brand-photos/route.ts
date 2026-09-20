@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const m = dataUrl?.match(/^data:(image\/[a-z]+);base64,(.+)$/);
   if (!m) return NextResponse.json({ error: "Imagen no encontrada" }, { status: 404 });
   return new NextResponse(new Uint8Array(Buffer.from(m[2], "base64")), {
-    headers: { "Content-Type": m[1], "Cache-Control": "private, max-age=31536000, immutable" },
+    headers: { "Content-Type": m[1], "Cache-Control": "private, max-age=300, must-revalidate" },
   });
 }
 

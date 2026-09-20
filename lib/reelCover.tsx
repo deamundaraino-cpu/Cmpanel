@@ -9,6 +9,7 @@ import {
   fonts,
   mix,
   pairOf,
+  PRIVATE_IMAGE_HEADERS,
   resolveTheme,
   type BrandPhoto,
   type BrandStyle,
@@ -16,6 +17,7 @@ import {
 } from "./slide";
 import { REEL_TEMPLATES, type BrandDesign, type ReelTemplate } from "./brandDesign";
 import { BOX_PAD, fitLines, LINE_HEIGHT, metricsFor, stripPunct, tokens, type Line, type Metrics } from "./typeset";
+import { textureDataUri } from "./texture";
 
 export { REEL_TEMPLATES } from "./brandDesign";
 export type { ReelTemplate } from "./brandDesign";
@@ -129,6 +131,7 @@ type Ctx = {
   align: "center" | "flex-start";
   tilt: boolean;
   background: BrandDesign["background"];
+  texture: BrandDesign["texture"];
   radius: (soft: number) => number;
 };
 
@@ -145,6 +148,7 @@ function ctxOf(style: BrandStyle): Ctx {
     align: d.align === "center" ? "center" : "flex-start",
     tilt: d.tilt,
     background: d.background,
+    texture: d.texture,
     radius: (soft: number) => (d.shape === "sharp" ? 0 : soft),
   };
 }
@@ -189,9 +193,14 @@ function Backdrop({ theme, photo, ctx, anchorX = 0.5, glow, photoTop = 0 }: {
       : ctx.background === "degradado"
         ? `linear-gradient(165deg, ${tint} 0%, ${theme.dark} 60%)`
         : `radial-gradient(circle at ${Math.round(anchorX * 100)}% 62%, ${tint} 0%, ${theme.dark} 58%)`;
+  const texture = textureDataUri(ctx.texture, theme.accent, W, H, W + H);
   return (
     <>
       <Abs h={H} style={{ background }} />
+      {texture ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={texture} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }} />
+      ) : null}
       {photo && !photo.cutout ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -457,6 +466,7 @@ export function renderReelCover(opts: { template: ReelTemplate; text: string; st
     width: W,
     height: H,
     fonts: fonts(designOf(opts.style)),
+    headers: PRIVATE_IMAGE_HEADERS,
   });
 }
 

@@ -94,7 +94,7 @@ export default function ReelCoverPicker({
           </button>
         )}
       </div>
-      {photos.length > 1 && (
+      {photos.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-zinc-500">Foto:</span>
           <button

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parseEmphasis, stripEmphasis } from "./emphasis";
 import { BrandDesign, COVER_LAYOUTS, DEFAULT_DESIGN, FONT_PAIRS, type CoverLayout, type VisualStyle } from "./brandDesign";
 import { BOX_PAD, fitLines, LINE_HEIGHT, metricsFor, tokens } from "./typeset";
+import { textureDataUri } from "./texture";
 
 export { COVER_LAYOUTS, VISUAL_STYLES } from "./brandDesign";
 export type { CoverLayout, VisualStyle } from "./brandDesign";
@@ -44,6 +45,16 @@ function radius(style: BrandStyle, soft: number): number {
   return designOf(style).shape === "sharp" ? 0 : soft;
 }
 
+/** Grafismo de fondo (partículas, malla, granulado) según el ADN de la marca. */
+function Texture({ style, theme, w = W, h = H }: { style: BrandStyle; theme: Theme; w?: number; h?: number }) {
+  const uri = textureDataUri(designOf(style).texture, theme.accent, w, h, hashString(style.brandName));
+  if (!uri) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={uri} width={w} height={h} style={{ position: "absolute", left: 0, top: 0, width: w, height: h, display: "flex" }} />
+  );
+}
+
 /** Fondo base del lienzo según el ADN: plano, halo tras la figura o degradado. */
 function canvasBg(style: BrandStyle, theme: Theme, at = "50% 62%"): string {
   const d = designOf(style);
@@ -75,6 +86,12 @@ export type BrandStyle = {
 
 const W = 1080;
 const H = 1350;
+
+/**
+ * Las portadas son privadas de cada cliente y cambian al tocar el esquema o las
+ * fotos: no deben quedarse cacheadas (@vercel/og las marca inmutables por un año).
+ */
+export const PRIVATE_IMAGE_HEADERS = { "Cache-Control": "private, no-store, max-age=0, must-revalidate" };
 
 export function hashString(text: string): number {
   let h = 0;
@@ -609,8 +626,10 @@ function renderBoldImpacto(slide: Slide, index: number, total: number, style: Br
         background: canvasBg(style, theme),
         color: "#ffffff",
         fontFamily: pairOf(style).body.family,
+        position: "relative",
       }}
     >
+      <Texture style={style} theme={theme} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 26, fontWeight: 800, color: "#ffffff" }}>
           {avatar ? (
@@ -780,6 +799,7 @@ function CoverBg({ style, theme, tone }: { style: BrandStyle; theme: Theme; tone
   return (
     <>
       <Abs h={H} style={{ background: base }} />
+      <Texture style={style} theme={theme} />
       {bg ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -790,6 +810,7 @@ function CoverBg({ style, theme, tone }: { style: BrandStyle; theme: Theme; tone
             style={{ position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover", display: "flex" }}
           />
           <Abs h={H} style={{ background: alpha(tone === "light" ? theme.light : theme.dark, tone === "light" ? 0.82 : 0.78) }} />
+          <Texture style={style} theme={theme} />
         </>
       ) : null}
     </>
@@ -914,6 +935,7 @@ function coverTextoDetras(slide: Slide, total: number, style: BrandStyle, theme:
         background: canvasBg(style, theme, "50% 55%"),
       }}
     >
+      <Texture style={style} theme={theme} />
       <div style={{ position: "absolute", top: 64, left: 72, display: "flex", fontSize: 28, fontWeight: 800, color: alpha("#ffffff", 0.85) }}>
         {style.brandName}
       </div>
@@ -961,6 +983,7 @@ function coverSplit(slide: Slide, total: number, style: BrandStyle, theme: Theme
         background: canvasBg(style, theme, "78% 45%"),
       }}
     >
+      <Texture style={style} theme={theme} />
       <div
         style={{
           position: "absolute",
@@ -1044,9 +1067,10 @@ function coverNumero(slide: Slide, total: number, style: BrandStyle, theme: Them
         position: "relative",
         overflow: "hidden",
         fontFamily: pairOf(style).body.family,
-        background: theme.dark,
+        background: canvasBg(style, theme, "50% 45%"),
       }}
     >
+      <Texture style={style} theme={theme} />
       <div
         style={{
           position: "absolute",
@@ -1384,5 +1408,5 @@ export function renderSlide(opts: { slide: Slide; index: number; total: number; 
           ? renderBoldContraste(slide, index, total, style)
           : renderBoldImpacto(slide, index, total, style);
 
-  return new ImageResponse(tree, { width: W, height: H, fonts: fonts(designOf(style)) });
+  return new ImageResponse(tree, { width: W, height: H, fonts: fonts(designOf(style)), headers: PRIVATE_IMAGE_HEADERS });
 }
