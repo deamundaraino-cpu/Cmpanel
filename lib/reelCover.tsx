@@ -243,9 +243,9 @@ function Shade({ theme, where }: { theme: Theme; where: "top" | "bottom" | "left
   return <Abs h={H} style={{ background }} />;
 }
 
-function Root({ theme, ctx, children }: { theme: Theme; ctx: Ctx; children: React.ReactNode }) {
+function Root({ theme, ctx, bg, children }: { theme: Theme; ctx: Ctx; bg?: string; children: React.ReactNode }) {
   return (
-    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: ctx.body, background: theme.dark }}>
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: ctx.body, background: bg || theme.dark }}>
       {children}
     </div>
   );
@@ -457,7 +457,150 @@ function detras(args: Args) {
   );
 }
 
-const RENDERERS: Record<ReelTemplate, (a: Args) => React.ReactElement> = { centro, arriba, circulo, cintas, cita, split, detras };
+function Rule({ color }: { color: string }) {
+  return <div style={{ display: "flex", width: "100%", height: 2, background: color }} />;
+}
+
+function Kicker({ text, color, size = 24 }: { text: string; color: string; size?: number }) {
+  return <div style={{ display: "flex", fontSize: size, fontWeight: 800, letterSpacing: size * 0.18, color }}>{text.toUpperCase()}</div>;
+}
+
+/** Textura del ADN sobre un fondo claro o de color. */
+function TextureOver({ ctx, color }: { ctx: Ctx; color: string }) {
+  const uri = textureDataUri(ctx.texture, color, W, H, W * 3);
+  if (!uri) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={uri} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }} />;
+}
+
+/** Fondo claro, filetes finos y figura abajo: portada de revista. */
+function editorial({ text, style, theme, photo }: Args) {
+  const ctx = ctxOf(style);
+  const ink = theme.dark;
+  const zone = { x: M, y: 330, w: W - 2 * M, h: 520 };
+  const lines = fitLines(tokens(text, ctx.upper), zone, { m: ctx.m, maxSize: 200, boxed: ctx.boxed });
+  return (
+    <Root theme={theme} ctx={ctx} bg={theme.light}>
+      <TextureOver ctx={ctx} color={theme.accent} />
+      <Abs x={M} y={250} w={W - 2 * M} h={60} style={{ flexDirection: "column", justifyContent: "flex-end", gap: 18 }}>
+        <Kicker text={style.brandName} color={theme.accent} />
+        <Rule color={alpha(ink, 0.25)} />
+      </Abs>
+      <Zoned zone={zone} justify="flex-start" align="flex-start">
+        <TextLines lines={lines} align="flex-start" theme={theme} ctx={ctx} color={ink} />
+      </Zoned>
+      <Abs x={M} y={900} w={W - 2 * M} h={60} style={{ flexDirection: "column", gap: 16 }}>
+        <Rule color={alpha(ink, 0.25)} />
+        <div style={{ display: "flex", fontSize: 26, color: alpha(ink, 0.6) }}>Por {style.brandHandle}</div>
+      </Abs>
+      {photo?.cutout ? <Person photo={photo} height={900} /> : null}
+      {!photo?.cutout && photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.src} width={W} height={900} style={{ position: "absolute", left: 0, top: H - 900, width: W, height: 900, objectFit: "cover", display: "flex" }} />
+      ) : null}
+    </Root>
+  );
+}
+
+/** Foto enmarcada sobre fondo limpio y titular debajo. */
+function marco({ text, style, theme, photo }: Args) {
+  const ctx = ctxOf(style);
+  const ink = theme.dark;
+  const frame = { x: 90, y: 250, w: W - 180, h: 1000 };
+  const zone = { x: M, y: 1330, w: W - 2 * M, h: 300 };
+  const lines = fitLines(tokens(text, ctx.upper), zone, { m: ctx.m, maxSize: 150, boxed: ctx.boxed, maxLines: 3 });
+  return (
+    <Root theme={theme} ctx={ctx} bg={theme.light}>
+      <TextureOver ctx={ctx} color={theme.accent} />
+      <Abs x={frame.x - 14} y={frame.y - 14} w={frame.w + 28} h={frame.h + 28} style={{ border: `2px solid ${alpha(ink, 0.35)}`, borderRadius: ctx.radius(8) }} />
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo.src}
+          width={frame.w}
+          height={frame.h}
+          style={{ position: "absolute", left: frame.x, top: frame.y, width: frame.w, height: frame.h, objectFit: "cover", borderRadius: ctx.radius(4), display: "flex" }}
+        />
+      ) : null}
+      <Zoned zone={zone} justify="center" align="center">
+        <TextLines lines={lines} align="center" theme={theme} ctx={ctx} color={ink} />
+      </Zoned>
+      <Abs y={1680} h={40} style={{ justifyContent: "center", alignItems: "center" }}>
+        <Kicker text={style.brandHandle} color={alpha(ink, 0.55)} size={22} />
+      </Abs>
+    </Root>
+  );
+}
+
+/** Foto arriba y franja de color abajo con el titular. */
+function banda({ text, style, theme, photo }: Args) {
+  const ctx = ctxOf(style);
+  const bandY = 1150;
+  const onAccent = contrastText(theme.accent);
+  const zone = { x: M, y: bandY + 90, w: W - 2 * M, h: 420 };
+  const lines = fitLines(tokens(text, ctx.upper), zone, { m: ctx.m, maxSize: 170, boxed: ctx.boxed, maxLines: 3 });
+  return (
+    <Root theme={theme} ctx={ctx}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.src} width={W} height={bandY} style={{ position: "absolute", left: 0, top: 0, width: W, height: bandY, objectFit: "cover", display: "flex" }} />
+      ) : (
+        <Backdrop theme={theme} photo={null} ctx={ctx} />
+      )}
+      <Abs y={bandY} h={H - bandY} style={{ background: theme.accent }} />
+      <Zoned zone={zone} justify="center" align="flex-start">
+        <TextLines
+          lines={lines}
+          align="flex-start"
+          theme={theme}
+          ctx={ctx}
+          color={onAccent}
+          strongBg={theme.dark}
+          strongColor={ctx.boxed ? undefined : theme.dark}
+        />
+      </Zoned>
+      <Abs x={M} y={H - 130} w={W - 2 * M} h={40} style={{ alignItems: "center" }}>
+        <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color: alpha(onAccent, 0.8) }}>{style.brandHandle}</div>
+      </Abs>
+    </Root>
+  );
+}
+
+/** Sin foto: una frase centrada con mucho aire. */
+function declaracion({ text, style, theme }: Args) {
+  const ctx = ctxOf(style);
+  const ink = theme.dark;
+  const zone = { x: 140, y: 620, w: W - 280, h: 640 };
+  const lines = fitLines(tokens(text, ctx.upper), zone, { m: ctx.m, maxSize: 190, boxed: ctx.boxed });
+  return (
+    <Root theme={theme} ctx={ctx} bg={theme.light}>
+      <TextureOver ctx={ctx} color={theme.accent} />
+      <Abs y={480} h={40} style={{ justifyContent: "center", alignItems: "center" }}>
+        <div style={{ display: "flex", width: 90, height: 4, background: theme.accent }} />
+      </Abs>
+      <Zoned zone={zone} justify="center" align="center">
+        <TextLines lines={lines} align="center" theme={theme} ctx={ctx} color={ink} />
+      </Zoned>
+      <Abs y={1420} h={40} style={{ justifyContent: "center", alignItems: "center" }}>
+        <Kicker text={style.brandHandle} color={alpha(ink, 0.55)} size={22} />
+      </Abs>
+    </Root>
+  );
+}
+
+const RENDERERS: Record<ReelTemplate, (a: Args) => React.ReactElement> = {
+  centro,
+  arriba,
+  circulo,
+  cintas,
+  cita,
+  split,
+  detras,
+  editorial,
+  marco,
+  banda,
+  declaracion,
+};
 
 export function renderReelCover(opts: { template: ReelTemplate; text: string; style: BrandStyle; photo: BrandPhoto | null }) {
   const theme = resolveTheme(opts.style);
