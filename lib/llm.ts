@@ -39,14 +39,22 @@ export async function getLlmConfig() {
   } catch {
     // Tabla app_settings aún no creada: solo env vars.
   }
-  const provider = db.llm_provider || process.env.LLM_PROVIDER || "groq";
+  const envProvider = process.env.LLM_PROVIDER || "groq";
+  const provider = db.llm_provider || envProvider;
   const preset = PROVIDERS[provider] || PROVIDERS.groq;
   const baseUrl = db.llm_base_url || process.env.LLM_BASE_URL || preset.baseUrl;
   const model = db.llm_model || process.env.LLM_MODEL || preset.model;
-  const apiKey = db.llm_api_key || process.env.LLM_API_KEY || "";
+  // La llave del entorno es de SU proveedor: mandársela a otro solo produce un
+  // "Invalid API Key" confuso. Cada proveedor usa la suya o no se usa.
+  const envKey = provider === envProvider ? process.env.LLM_API_KEY || "" : "";
+  const apiKey = db.llm_api_key || envKey;
   const source: "db" | "env" = db.llm_api_key || db.llm_provider ? "db" : "env";
   if (!apiKey) {
-    throw new LlmError("La IA no está configurada (ponla en /admin o en las env del servidor).");
+    throw new LlmError(
+      db.llm_provider
+        ? `La IA está configurada como "${provider}" en /admin pero sin llave propia (la del servidor es de "${envProvider}"). Pega una llave de ${provider} o deja el proveedor vacío.`
+        : "La IA no está configurada (ponla en /admin o en las env del servidor)."
+    );
   }
   if (!baseUrl) throw new LlmError("Falta la URL base del proveedor de IA.");
   return { provider, baseUrl, model, apiKey, source };

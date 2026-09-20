@@ -68,6 +68,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Cambiar de proveedor sin su llave dejaría la IA rota para todos los
+    // clientes: se rechaza antes de guardar.
+    if (typeof body.llm_provider === "string" && body.llm_provider.trim()) {
+      const nextProvider = body.llm_provider.trim();
+      const db = await getAppSettings(AI_KEYS);
+      const keyInBody = typeof body.llm_api_key === "string" && body.llm_api_key.trim() && !body.llm_api_key.includes("••••");
+      const hasKey = keyInBody || db.llm_api_key || nextProvider === (process.env.LLM_PROVIDER || "groq");
+      if (!hasKey) {
+        return fail(
+          new Error(`Para usar "${nextProvider}" pega también su API key: la llave del servidor es de "${process.env.LLM_PROVIDER || "groq"}".`),
+          400
+        );
+      }
+    }
+
     for (const k of AI_KEYS) {
       if (!(k in body) || typeof body[k] !== "string") continue;
       // No sobrescribir secretos con el valor enmascarado.
