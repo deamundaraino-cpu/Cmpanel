@@ -3,7 +3,7 @@ import { requireClient } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
 import { getBrandDesign } from "@/lib/brand";
 import { listPhotoMeta } from "@/lib/brandPhotos";
-import { brandCoverLayouts, orderedReelTemplates } from "@/lib/brandDesign";
+import { brandCoverLayouts, brandReelTemplates } from "@/lib/brandDesign";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,8 @@ export default async function ProposalsPage() {
     getBrandDesign(clientId),
     listPhotoMeta(clientId),
   ]);
-  // Las plantillas se muestran en el orden que el esquema de la marca prefiere.
-  const reelTemplates = orderedReelTemplates(design);
+  // Solo las composiciones que el esquema de la marca tiene activas, en su orden.
+  const reelTemplates = brandReelTemplates(design);
   const coverLayouts = brandCoverLayouts(design);
   const coverPhotos = photos.filter((p) => p.cover).map(({ id, hasCutout }) => ({ id, hasCutout }));
 

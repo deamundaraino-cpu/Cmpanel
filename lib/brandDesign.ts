@@ -249,10 +249,10 @@ export function brandCoverLayouts(design: BrandDesign): CoverLayout[] {
   return design.coverLayouts.length ? design.coverLayouts : DEFAULT_DESIGN.coverLayouts;
 }
 
-/** Plantillas de reel en el orden que prefiere la marca (el resto queda al final). */
-export function orderedReelTemplates(design: BrandDesign): ReelTemplate[] {
-  const preferred = design.reelTemplates;
-  return [...preferred, ...REEL_TEMPLATES.map((t) => t.value).filter((t) => !preferred.includes(t))];
+/** Portadas de reel que usa la marca, en su orden (las no elegidas no se ofrecen). */
+export function brandReelTemplates(design: BrandDesign): ReelTemplate[] {
+  const preferred = design.reelTemplates.filter((t) => REEL_TEMPLATES.some((r) => r.value === t));
+  return preferred.length ? preferred : DEFAULT_DESIGN.reelTemplates;
 }
 
 export const DESIGN_INSTRUCTION = `Eres director de arte. A partir de la ficha de marca, elige el esquema visual con el que se generarán sus carruseles y portadas de reel. Devuelve SOLO JSON:
