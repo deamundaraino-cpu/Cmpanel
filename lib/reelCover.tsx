@@ -132,6 +132,8 @@ type Ctx = {
   tilt: boolean;
   background: BrandDesign["background"];
   texture: BrandDesign["texture"];
+  textureIntensity: BrandDesign["textureIntensity"];
+  textureTone: (theme: Theme) => string;
   radius: (soft: number) => number;
 };
 
@@ -149,6 +151,8 @@ function ctxOf(style: BrandStyle): Ctx {
     tilt: d.tilt,
     background: d.background,
     texture: d.texture,
+    textureIntensity: d.textureIntensity,
+    textureTone: (t: Theme) => (d.textureColor === "secundario" ? t.accent2 : d.textureColor === "claro" ? t.light : t.accent),
     radius: (soft: number) => (d.shape === "sharp" ? 0 : soft),
   };
 }
@@ -193,7 +197,7 @@ function Backdrop({ theme, photo, ctx, anchorX = 0.5, glow, photoTop = 0 }: {
       : ctx.background === "degradado"
         ? `linear-gradient(165deg, ${tint} 0%, ${theme.dark} 60%)`
         : `radial-gradient(circle at ${Math.round(anchorX * 100)}% 62%, ${tint} 0%, ${theme.dark} 58%)`;
-  const texture = textureDataUri(ctx.texture, theme.accent, W, H, W + H);
+  const texture = textureDataUri(ctx.texture, ctx.textureTone(theme), W, H, W + H, ctx.textureIntensity);
   return (
     <>
       <Abs h={H} style={{ background }} />
@@ -467,7 +471,7 @@ function Kicker({ text, color, size = 24 }: { text: string; color: string; size?
 
 /** Textura del ADN sobre un fondo claro o de color. */
 function TextureOver({ ctx, color }: { ctx: Ctx; color: string }) {
-  const uri = textureDataUri(ctx.texture, color, W, H, W * 3);
+  const uri = textureDataUri(ctx.texture, color, W, H, W * 3, ctx.textureIntensity);
   if (!uri) return null;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={uri} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }} />;

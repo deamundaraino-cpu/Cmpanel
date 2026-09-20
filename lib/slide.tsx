@@ -47,7 +47,9 @@ function radius(style: BrandStyle, soft: number): number {
 
 /** Grafismo de fondo (partículas, malla, granulado) según el ADN de la marca. */
 function Texture({ style, theme, w = W, h = H }: { style: BrandStyle; theme: Theme; w?: number; h?: number }) {
-  const uri = textureDataUri(designOf(style).texture, theme.accent, w, h, hashString(style.brandName));
+  const d = designOf(style);
+  const color = d.textureColor === "secundario" ? theme.accent2 : d.textureColor === "claro" ? theme.light : theme.accent;
+  const uri = textureDataUri(d.texture, color, w, h, hashString(style.brandName), d.textureIntensity);
   if (!uri) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
