@@ -12,15 +12,23 @@ import { fallbackCoverText, renderReelCover } from "@/lib/reelCover";
 export const maxDuration = 60;
 
 type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
+type CarouselSlide = { titulo: string; cuerpo: string; portadas?: string[] };
 
-async function loadScript(clientId: number, id: string) {
+async function loadProposal(clientId: number, id: string) {
   const sql = getSql();
   const rows = await sql<ProposalRow[]>`
     SELECT * FROM proposals WHERE client_id = ${clientId} AND id = ${Number(id)}
   `;
   const proposal = rows[0];
-  if (!proposal?.slides || proposal.formato !== "guion_video") return null;
-  return { proposal, beats: JSON.parse(proposal.slides) as Beat[] };
+  if (!proposal?.slides) return null;
+  const isScript = proposal.formato === "guion_video";
+  const items = JSON.parse(proposal.slides) as (Beat & CarouselSlide)[];
+  return { proposal, isScript, items, beats: items as Beat[] };
+}
+
+async function loadScript(clientId: number, id: string) {
+  const loaded = await loadProposal(clientId, id);
+  return loaded?.isScript ? loaded : null;
 }
 
 /** Render de una propuesta de portada: ?t=plantilla&k=índice de texto (&texto= para uno propio). */
@@ -70,24 +78,30 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   try {
-    const script = await loadScript(auth.clientId, id);
-    if (!script) return fail(new Error("Guion no encontrado"), 404);
+    const loaded = await loadProposal(auth.clientId, id);
+    if (!loaded) return fail(new Error("Propuesta no encontrada"), 404);
 
     const quota = await consumeQuota(auth.userId, "portada");
     if (!quota.ok) return quotaExceeded(quota);
 
     const brief = await buildBrandBrief(auth.clientId);
-    const previous = script.beats[0]?.portadas || [];
+    const previous = loaded.items[0]?.portadas || [];
+    const contenido = loaded.isScript
+      ? `Guion del reel:\n${loaded.beats.map((b) => `[${b.seccion}] ${b.texto}`).join("\n")}`
+      : `Carrusel (slide a slide):\n${loaded.items.map((s, i) => `${i + 1}. ${s.titulo}${s.cuerpo ? ` — ${s.cuerpo}` : ""}`).join("\n")}`;
+    const rol = loaded.isScript
+      ? "Eres un experto en miniaturas y portadas de Reels que paran el scroll."
+      : "Eres un experto en portadas (primer slide) de carruseles de Instagram que frenan el scroll en el feed.";
     const gen = await chatJson<{ portadas: string[] }>(
-      `Eres un experto en miniaturas y portadas de Reels que paran el scroll. Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}`,
-      `Guion del reel:\n${script.beats.map((b) => `[${b.seccion}] ${b.texto}`).join("\n")}\n\n${
+      `${rol} Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}`,
+      `${contenido}\n\n${
         previous.length ? `Textos de portada anteriores (NO los repitas, busca ángulos nuevos):\n${previous.join("\n")}\n\n` : ""
       }${COVER_TEXTS_INSTRUCTION}\n\nDevuelve JSON: {"portadas": ["...", "...", "...", "...", "...", "..."]}`
     );
     const portadas = sanitizeCoverTexts(gen.portadas);
     if (!portadas.length) return fail(new Error("La IA no devolvió textos de portada válidos"), 500);
 
-    const beats = script.beats.map((b, i) => (i === 0 ? { ...b, portadas } : b));
+    const beats = loaded.items.map((b, i) => (i === 0 ? { ...b, portadas } : b));
     const sql = getSql();
     await sql`
       UPDATE proposals SET slides = ${JSON.stringify(beats)}

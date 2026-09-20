@@ -7,7 +7,7 @@ import ReelCoverPicker from "./ReelCoverPicker";
 import CarouselCoverPicker from "./CarouselCoverPicker";
 import type { CoverLayout, ReelTemplate } from "@/lib/brandDesign";
 
-type Slide = { titulo: string; cuerpo: string; layout?: string; foto?: string };
+type Slide = { titulo: string; cuerpo: string; layout?: string; foto?: string; portadas?: string[] };
 type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
 
 export default function ProposalCard({
@@ -320,7 +320,12 @@ export default function ProposalCard({
             layouts={coverLayouts}
             layout={slides[0]?.layout}
             selectedPhoto={slides[0]?.foto}
-            onChanged={() => setCoverVersion((v) => v + 1)}
+            titulo={slides[0]?.titulo || ""}
+            initialTexts={slides[0]?.portadas || []}
+            onChanged={() => {
+              setCoverVersion((v) => v + 1);
+              router.refresh();
+            }}
           />
         </>
       )}

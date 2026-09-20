@@ -63,6 +63,10 @@ export async function PATCH(
       const slides = JSON.parse(proposal.slides) as { titulo: string; cuerpo: string; layout?: string; foto?: string }[];
       if (!slides[0]) return fail(new Error("El carrusel no tiene portada"), 400);
 
+      if (typeof body.titulo === "string" && body.titulo.trim()) {
+        slides[0].titulo = body.titulo.trim().slice(0, 120);
+      }
+
       if (typeof body.foto === "string") {
         const meta = await listPhotoMeta(clientId);
         if (!meta.some((m) => m.id === body.foto)) return fail(new Error("Foto no encontrada"), 400);
