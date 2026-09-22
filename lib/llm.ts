@@ -96,34 +96,50 @@ async function callProvider(cfg: ProviderCall, system: string, user: string): Pr
         { role: "user", content: user },
       ],
       temperature: 0.7,
+      // Los guiones y carruseles son JSON largos; sin margen el modelo corta la
+      // respuesta a medias (o la gasta entera "pensando") y llega vacía.
+      max_tokens: 6000,
     }),
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const transient = res.status === 503 || res.status === 429;
+    const transient = res.status === 503 || res.status === 429 || res.status >= 500;
     throw new LlmError(json?.error?.message || `Error del proveedor de IA (${res.status})`, transient);
   }
-  const content = json?.choices?.[0]?.message?.content;
-  if (!content) throw new LlmError("El proveedor de IA no devolvió contenido.");
+  const choice = json?.choices?.[0];
+  const message = choice?.message;
+  // Los modelos con razonamiento a veces dejan el contenido vacío y el JSON
+  // dentro del razonamiento: se aprovecha antes de darlo por perdido.
+  const content = message?.content?.trim() || (/[{[]/.test(message?.reasoning || "") ? message.reasoning : "");
+  if (!content) {
+    const why = choice?.finish_reason === "length" ? " (se quedó sin espacio)" : choice?.finish_reason ? ` (${choice.finish_reason})` : "";
+    // Transitorio: con otro intento, o con el proveedor de respaldo, suele salir.
+    throw new LlmError(`El proveedor de IA no devolvió contenido${why}.`, true);
+  }
   return content;
 }
 
 export async function chat(system: string, user: string): Promise<string> {
   const primary = await getLlmConfig();
-  try {
-    return await callProvider(primary, system, user);
-  } catch (e) {
-    // Solo saltamos a OpenRouter si el fallo es transitorio (saturación/rate
-    // limit) del proveedor principal, no ante errores de configuración o de
-    // contenido — esos son iguales en cualquier proveedor.
-    if (e instanceof LlmError && e.transient) {
-      const fallback = await getFallbackLlmConfig();
-      if (fallback && fallback.provider !== primary.provider) {
-        return await callProvider(fallback, system, user);
+  // Ante fallos transitorios (saturación, rate limit o respuesta vacía) se
+  // reintenta y, si sigue, se pasa al respaldo. Los errores de configuración o
+  // de autenticación se lanzan tal cual: serían iguales en cualquier intento.
+  const attempts: { cfg: ProviderCall; tries: number }[] = [{ cfg: primary, tries: 2 }];
+  const fallback = await getFallbackLlmConfig();
+  if (fallback && fallback.provider !== primary.provider) attempts.push({ cfg: fallback, tries: 2 });
+
+  let last: unknown = new LlmError("La IA no respondió.");
+  for (const { cfg, tries } of attempts) {
+    for (let i = 0; i < tries; i++) {
+      try {
+        return await callProvider(cfg, system, user);
+      } catch (e) {
+        if (!(e instanceof LlmError) || !e.transient) throw e;
+        last = e;
       }
     }
-    throw e;
   }
+  throw last;
 }
 
 /** Pide una respuesta JSON y la parsea con tolerancia a texto extra. */
