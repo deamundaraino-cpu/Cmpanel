@@ -25,6 +25,8 @@ const KEYS = [
   "brand_objectives",
   "content_target_per_week",
   "brand_avoid",
+  "brand_rules",
+  "brand_banned",
 ];
 
 function Field({
@@ -492,6 +494,33 @@ export default function BrandForm() {
             onChange={set("brand_avoid")}
             rows={3}
             placeholder="Ej: nada de promesas de 'hazte rico rápido', no mencionar competidores por nombre, evitar anglicismos innecesarios."
+          />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+        <h2 className="font-medium">📏 Manual de redacción (avanzado)</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Reglas duras de esta marca: qué datos no puede inventar la IA, qué normativa puede citar y cómo, glosario
+          local, comparaciones prohibidas, formato de cierre. Se inyecta con prioridad máxima en todo lo que escribe
+          la IA —ideas, carruseles, guiones y textos de portada— y anula el resto de instrucciones.
+        </p>
+        <div className="mt-3 grid gap-3">
+          <TextArea
+            label="Reglas de redacción"
+            value={s.brand_rules || ""}
+            onChange={set("brand_rules")}
+            rows={14}
+            placeholder={"Ej:\n- Nunca inventes cifras ni porcentajes. Si falta un dato, escribe [DATO A VALIDAR].\n- Solo puedes citar estas normas: … Cualquier otra, escribe [NORMA A VALIDAR].\n- Glosario: di \"mayor valor\", nunca \"plusvalía\".\n- Nunca afirmes que una estructura es mejor que otra en abstracto."}
+            hint="Cuanto más concreto, mejor. Las reglas en negativo (nunca, jamás, prohibido) funcionan mejor que las genéricas."
+          />
+          <TextArea
+            label="Términos prohibidos (uno por línea)"
+            value={s.brand_banned || ""}
+            onChange={set("brand_banned")}
+            rows={6}
+            placeholder={"plusvalía\nHacienda\nS.A.S\n/\\b(ten|pod|sab|dud|sal)és\\b/"}
+            hint="Se revisan en el texto ya generado: si aparecen, la IA reescribe la pieza y, si insisten, la propuesta queda marcada para revisión. Entre barras se admite una expresión regular."
           />
         </div>
       </section>

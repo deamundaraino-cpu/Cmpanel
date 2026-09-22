@@ -27,6 +27,8 @@ const KEYS = [
   "brand_pillars",
   "brand_objectives",
   "brand_avoid",
+  "brand_rules",
+  "brand_banned",
   "content_target_per_week",
 ];
 

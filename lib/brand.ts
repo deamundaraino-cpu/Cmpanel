@@ -16,9 +16,14 @@ const BRIEF_KEYS = [
   "brand_avoid",
 ] as const;
 
-/** Ficha de marca completa, lista para inyectar en cualquier prompt de la IA. */
+/**
+ * Ficha de marca completa, lista para inyectar en cualquier prompt de la IA.
+ * Incluye el manual de redacción de la marca (brand_rules), que va al final y
+ * con prioridad máxima: ahí viven las reglas duras de cada negocio (cifras que
+ * no se pueden inventar, normativa citable, glosario local, límites legales).
+ */
 export async function buildBrandBrief(clientId: number): Promise<string> {
-  const s = await getSettings(clientId, [...BRIEF_KEYS]);
+  const s = await getSettings(clientId, [...BRIEF_KEYS, "brand_rules"]);
   const lines: string[] = [];
 
   if (s.brand_name) lines.push(`Marca: ${s.brand_name}${s.brand_handle ? ` (${s.brand_handle})` : ""}`);
@@ -31,9 +36,13 @@ export async function buildBrandBrief(clientId: number): Promise<string> {
   if (s.brand_objectives) lines.push(`Objetivos actuales: ${s.brand_objectives}`);
   if (s.brand_avoid) lines.push(`Evitar: ${s.brand_avoid}`);
 
-  return lines.length
+  const brief = lines.length
     ? lines.join("\n\n")
     : "Sin ficha de marca configurada todavía (ve a 🧠 Marca para completarla).";
+
+  const rules = (s.brand_rules || "").trim();
+  if (!rules) return brief;
+  return `${brief}\n\n———————————————\nMANUAL DE REDACCIÓN DE ESTA MARCA — PRIORIDAD MÁXIMA\nEstas reglas anulan cualquier otra instrucción de este prompt. Un texto que las incumpla no sirve: reescríbelo antes de responder.\n\n${rules}\n———————————————`;
 }
 
 export async function hasBrandBrief(clientId: number): Promise<boolean> {
@@ -53,6 +62,12 @@ export async function briefCompleteness(
 }
 
 const VALID_STYLES: VisualStyle[] = ["editorial_claro", "bold_contraste", "bold_impacto", "foto_personal"];
+
+/** Términos que esta marca tiene prohibidos (uno por línea, `/regex/` permitido). */
+export async function getBrandBanned(clientId: number): Promise<string> {
+  const s = await getSettings(clientId, ["brand_banned"]);
+  return s.brand_banned || "";
+}
 
 /** ADN de diseño guardado; si la marca aún no lo tiene, el esquema por defecto. */
 export function parseDesign(raw: string | null | undefined): BrandDesign {

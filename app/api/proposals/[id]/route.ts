@@ -3,7 +3,8 @@ import { randomUUID } from "crypto";
 import { guardClient, fail } from "@/lib/api";
 import { getSql, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
-import { buildBrandBrief, getBrandDesign } from "@/lib/brand";
+import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
+import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
 import { brandCoverLayouts } from "@/lib/brandDesign";
 import {
   CarouselGen,
@@ -97,6 +98,8 @@ export async function PATCH(
 
       const brief = await buildBrandBrief(clientId);
       const coverLayouts = brandCoverLayouts(await getBrandDesign(clientId));
+      const banned = parseBannedRules(await getBrandBanned(clientId));
+      const repairSystem = `Eres un editor que corrige textos para que cumplan las reglas inviolables de la marca, sin cambiar lo que ya funciona ni el idioma local.\n\nFicha de marca:\n${brief}`;
       const isScript = proposal.formato === "guion_video";
 
       if (isScript) {
@@ -118,14 +121,16 @@ export async function PATCH(
           `Guion actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la PRIMERA sección (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "...", "texto": "...", "edicion": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
         );
         if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion revisado"), 500);
-        const q = clampQuality(gen.calidad);
+        const checked = await enforceBrandRules(gen, banned, repairSystem);
+        const q = clampQuality(checked.gen.calidad);
+        const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
         await sql`
           UPDATE proposals SET
-            slides = ${JSON.stringify(applyCoverTexts(gen))},
-            caption = ${gen.caption || proposal.caption || ""},
-            hashtags = ${JSON.stringify(gen.hashtags || [])},
+            slides = ${JSON.stringify(applyCoverTexts(checked.gen))},
+            caption = ${checked.gen.caption || proposal.caption || ""},
+            hashtags = ${JSON.stringify(checked.gen.hashtags || [])},
             quality = ${q.score},
-            quality_notes = ${q.notes},
+            quality_notes = ${notes},
             status = 'pendiente',
             client_feedback = NULL
           WHERE client_id = ${clientId} AND id = ${Number(id)}
@@ -138,14 +143,16 @@ export async function PATCH(
         `Carrusel actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió el carrusel revisado"), 500);
-      const q = clampQuality(gen.calidad);
+      const checked = await enforceBrandRules(gen, banned, repairSystem);
+      const q = clampQuality(checked.gen.calidad);
+      const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
       await sql`
         UPDATE proposals SET
-          slides = ${JSON.stringify(applyCoverLayout(gen, coverLayouts))},
-          caption = ${gen.caption || proposal.caption || ""},
-          hashtags = ${JSON.stringify(gen.hashtags || [])},
+          slides = ${JSON.stringify(applyCoverLayout(checked.gen, coverLayouts))},
+          caption = ${checked.gen.caption || proposal.caption || ""},
+          hashtags = ${JSON.stringify(checked.gen.hashtags || [])},
           quality = ${q.score},
-          quality_notes = ${q.notes},
+          quality_notes = ${notes},
           status = 'pendiente',
           client_feedback = NULL
         WHERE client_id = ${clientId} AND id = ${Number(id)}

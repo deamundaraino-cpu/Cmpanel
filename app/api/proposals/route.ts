@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
 import { getSql, PostRow, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
 import { chatJson } from "@/lib/llm";
-import { buildBrandBrief, getBrandDesign } from "@/lib/brand";
+import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
+import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
 import { brandCoverLayouts } from "@/lib/brandDesign";
 import {
   CarouselGen,
@@ -83,6 +84,9 @@ export async function POST(req: NextRequest) {
     if (!pilarRef) pilarRef = toPilar(pilar);
     const brief = await buildBrandBrief(clientId);
     const coverLayouts = brandCoverLayouts(await getBrandDesign(clientId));
+    const banned = parseBannedRules(await getBrandBanned(clientId));
+    // El corrector trabaja con la misma ficha (que ya incluye el manual de la marca).
+    const repairSystem = `Eres un editor que corrige textos para que cumplan las reglas inviolables de la marca, sin cambiar lo que ya funciona ni el idioma local.\n\nFicha de marca:\n${brief}`;
     const kind = formato === "guion_video" ? "guion_video" : "carrusel";
 
     let source: { context: string; sourcePostId: string | null };
@@ -101,16 +105,18 @@ export async function POST(req: NextRequest) {
         `${source.context}\n\nCrea un carrusel de 6-7 slides.\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "caption completo para el post con salto de líneas y CTA", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags mezclando volumen alto y nicho.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió slides"), 500);
-      const q = clampQuality(gen.calidad);
+      const checked = await enforceBrandRules(gen, banned, repairSystem);
+      const q = clampQuality(checked.gen.calidad);
+      const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
 
       const [row] = await sql<{ id: number }[]>`
         INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
         VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
-          ${JSON.stringify(applyCoverLayout(gen, coverLayouts))}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
-          NULL, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
+          ${JSON.stringify(applyCoverLayout(checked.gen, coverLayouts))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
+          NULL, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
         RETURNING id
       `;
-      return NextResponse.json({ ok: true, id: row.id, slides: gen.slides.length });
+      return NextResponse.json({ ok: true, id: row.id, slides: checked.gen.slides.length, avisos: checked.violations });
     }
 
     // --- guion_video ---
@@ -132,16 +138,18 @@ export async function POST(req: NextRequest) {
       `${source.context}\n\nEscribe un guion de video siguiendo EXACTAMENTE esta estructura, en este orden, respetando la intención de cada sección:\n${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la sección "${beatNames[0]}" (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "${beatNames[0]}", "texto": "guion hablado de esta sección", "edicion": "indicaciones de edición de esta sección"}, ...], "caption": "descripción/copy corto para acompañar el video al publicarlo", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\nUsa exactamente estos nombres de sección en el mismo orden: ${beatNames.join(", ")}. 10-15 hashtags.\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
     );
     if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion"), 500);
-    const q = clampQuality(gen.calidad);
+    const checked = await enforceBrandRules(gen, banned, repairSystem);
+    const q = clampQuality(checked.gen.calidad);
+    const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
 
     const [row] = await sql<{ id: number }[]>`
       INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
       VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
-        ${JSON.stringify(applyCoverTexts(gen))}, ${gen.caption || ""}, ${JSON.stringify(gen.hashtags || [])},
-        ${structure.id}, ${q.score}, ${q.notes}, ${pilarRef}, ${ideaRef})
+        ${JSON.stringify(applyCoverTexts(checked.gen))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
+        ${structure.id}, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
       RETURNING id
     `;
-    return NextResponse.json({ ok: true, id: row.id, beats: gen.beats.length });
+    return NextResponse.json({ ok: true, id: row.id, beats: checked.gen.beats.length, avisos: checked.violations });
   } catch (e) {
     return fail(e);
   }
