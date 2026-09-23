@@ -505,6 +505,11 @@ export default function BrandForm() {
           local, comparaciones prohibidas, formato de cierre. Se inyecta con prioridad máxima en todo lo que escribe
           la IA —ideas, carruseles, guiones y textos de portada— y anula el resto de instrucciones.
         </p>
+        <p className="mt-1 text-xs text-zinc-600">
+          La IA no aprende sola entre generaciones: lo que recuerda es esta ficha. Lo que sí hace es imitar tus
+          últimas 3 propuestas <strong className="text-zinc-400">aprobadas</strong> de cada formato, que se le muestran
+          como ejemplo de cómo escribe la marca. Aprobar buenas piezas es la forma más rápida de afinarla.
+        </p>
         <div className="mt-3 grid gap-3">
           <TextArea
             label="Reglas de redacción"

@@ -4,6 +4,7 @@ import { getSql, PostRow, ProposalRow, StructureRow, StructureBeat } from "@/lib
 import { chatJson } from "@/lib/llm";
 import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
 import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
+import { buildExamplesBlock } from "@/lib/brandExamples";
 import { brandCoverLayouts } from "@/lib/brandDesign";
 import {
   CarouselGen,
@@ -100,8 +101,9 @@ export async function POST(req: NextRequest) {
     if (!quota.ok) return quotaExceeded(quota);
 
     if (kind === "carrusel") {
+      const ejemplos = await buildExamplesBlock(clientId, "carrusel");
       const gen = await chatJson<CarouselGen>(
-        `Eres un creador de carruseles virales de Instagram. Escribes en español, directo, con ganchos fuertes, en el tono de voz de la marca y pensando en su cliente ideal. Cada slide: titulo corto y potente (máx 60 caracteres) y cuerpo de apoyo (máx 220 caracteres). El primer slide es la portada-gancho (cuerpo breve o vacío). El último slide es el CTA (seguir, guardar, comentar). En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}`,
+        `Eres un creador de carruseles virales de Instagram. Escribes en español, directo, con ganchos fuertes, en el tono de voz de la marca y pensando en su cliente ideal. Cada slide: titulo corto y potente (máx 60 caracteres) y cuerpo de apoyo (máx 220 caracteres). El primer slide es la portada-gancho (cuerpo breve o vacío). El último slide es el CTA (seguir, guardar, comentar). En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}${ejemplos}`,
         `${source.context}\n\nCrea un carrusel de 6-7 slides.\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "caption completo para el post con salto de líneas y CTA", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags mezclando volumen alto y nicho.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió slides"), 500);
@@ -133,8 +135,9 @@ export async function POST(req: NextRequest) {
     const beatsGuide = beats.map((b, i) => `${i + 1}. ${b.nombre}: ${b.guia}`).join("\n");
     const beatNames = beats.map((b) => b.nombre);
 
+    const ejemplos = await buildExamplesBlock(clientId, "guion_video");
     const gen = await chatJson<ScriptGen>(
-      `Eres un guionista experto en contenido de video corto (Reels, TikTok, Shorts) que domina estructuras probadas de retención y trabaja mano a mano con editores de video. Escribes en español, en el tono de voz de la marca, pensando en su cliente ideal. Escribes el texto EXACTO que la persona debe decir a cámara en cada sección (no descripciones ni instrucciones, el guion real hablado).\n\nFicha de marca:\n${brief}`,
+      `Eres un guionista experto en contenido de video corto (Reels, TikTok, Shorts) que domina estructuras probadas de retención y trabaja mano a mano con editores de video. Escribes en español, en el tono de voz de la marca, pensando en su cliente ideal. Escribes el texto EXACTO que la persona debe decir a cámara en cada sección (no descripciones ni instrucciones, el guion real hablado).\n\nFicha de marca:\n${brief}${ejemplos}`,
       `${source.context}\n\nEscribe un guion de video siguiendo EXACTAMENTE esta estructura, en este orden, respetando la intención de cada sección:\n${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la sección "${beatNames[0]}" (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "${beatNames[0]}", "texto": "guion hablado de esta sección", "edicion": "indicaciones de edición de esta sección"}, ...], "caption": "descripción/copy corto para acompañar el video al publicarlo", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\nUsa exactamente estos nombres de sección en el mismo orden: ${beatNames.join(", ")}. 10-15 hashtags.\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
     );
     if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion"), 500);
