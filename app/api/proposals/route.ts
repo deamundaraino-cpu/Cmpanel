@@ -110,15 +110,18 @@ export async function POST(req: NextRequest) {
       const checked = await enforceBrandRules(gen, banned, repairSystem);
       const q = clampQuality(checked.gen.calidad);
       const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
+      // Un error factual o de compliance que sobrevive a la reparación no se
+      // publica: queda bloqueado para revisión.
+      const estado = checked.blocked ? "bloqueada" : "pendiente";
 
       const [row] = await sql<{ id: number }[]>`
         INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
-        VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'carrusel',
+        VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, ${estado}, 'carrusel',
           ${JSON.stringify(applyCoverLayout(checked.gen, coverLayouts))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
           NULL, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
         RETURNING id
       `;
-      return NextResponse.json({ ok: true, id: row.id, slides: checked.gen.slides.length, avisos: checked.violations });
+      return NextResponse.json({ ok: true, id: row.id, slides: checked.gen.slides.length, bloqueada: checked.blocked, avisos: checked.violations });
     }
 
     // --- guion_video ---
@@ -144,15 +147,16 @@ export async function POST(req: NextRequest) {
     const checked = await enforceBrandRules(gen, banned, repairSystem);
     const q = clampQuality(checked.gen.calidad);
     const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
+    const estado = checked.blocked ? "bloqueada" : "pendiente";
 
     const [row] = await sql<{ id: number }[]>`
       INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
-      VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, 'pendiente', 'guion_video',
+      VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, ${estado}, 'guion_video',
         ${JSON.stringify(applyCoverTexts(checked.gen))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
         ${structure.id}, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
       RETURNING id
     `;
-    return NextResponse.json({ ok: true, id: row.id, beats: checked.gen.beats.length, avisos: checked.violations });
+    return NextResponse.json({ ok: true, id: row.id, beats: checked.gen.beats.length, bloqueada: checked.blocked, avisos: checked.violations });
   } catch (e) {
     return fail(e);
   }

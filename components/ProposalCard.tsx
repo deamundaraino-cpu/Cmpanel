@@ -136,14 +136,16 @@ export default function ProposalCard({
       ? "bg-emerald-600/20 text-emerald-300"
       : status === "rechazada"
         ? "bg-red-600/15 text-red-300"
-        : "bg-amber-600/20 text-amber-300";
+        : status === "bloqueada"
+          ? "bg-red-600/30 text-red-200"
+          : "bg-amber-600/20 text-amber-300";
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+    <div className={`rounded-xl border bg-zinc-900 p-5 ${status === "bloqueada" ? "border-red-700/70" : "border-zinc-800"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize ${badge}`}>
-            {status}
+            {status === "bloqueada" ? "⛔ bloqueada" : status}
           </span>
           {quality != null && (
             <span
@@ -280,6 +282,12 @@ export default function ProposalCard({
             </button>
           </div>
         </div>
+      )}
+
+      {status === "bloqueada" && (
+        <p className="mt-3 rounded-lg border border-red-800/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+          {qualityNotes || "Incumple reglas críticas de la marca."} · Corrígela con &quot;Pedir cambios&quot; antes de aprobarla.
+        </p>
       )}
 
       {isScript ? (

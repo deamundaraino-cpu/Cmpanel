@@ -131,11 +131,11 @@ export async function PATCH(
             hashtags = ${JSON.stringify(checked.gen.hashtags || [])},
             quality = ${q.score},
             quality_notes = ${notes},
-            status = 'pendiente',
+            status = ${checked.blocked ? "bloqueada" : "pendiente"},
             client_feedback = NULL
           WHERE client_id = ${clientId} AND id = ${Number(id)}
         `;
-        return NextResponse.json({ ok: true, regenerated: true });
+        return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked });
       }
 
       const gen = await chatJson<CarouselGen>(
@@ -153,11 +153,11 @@ export async function PATCH(
           hashtags = ${JSON.stringify(checked.gen.hashtags || [])},
           quality = ${q.score},
           quality_notes = ${notes},
-          status = 'pendiente',
+          status = ${checked.blocked ? "bloqueada" : "pendiente"},
           client_feedback = NULL
         WHERE client_id = ${clientId} AND id = ${Number(id)}
       `;
-      return NextResponse.json({ ok: true, regenerated: true });
+      return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked });
     }
 
     // ————— Cambio de estado —————
@@ -165,11 +165,17 @@ export async function PATCH(
     if (!["aprobada", "rechazada", "pendiente"].includes(status)) {
       return fail(new Error("Estado inválido"), 400);
     }
+    // Una pieza bloqueada por reglas críticas no se puede aprobar: primero se
+    // corrige (pedir cambios o reemplazar el texto).
     const updated = await sql<ProposalRow[]>`
       UPDATE proposals SET status = ${status}
       WHERE client_id = ${clientId} AND id = ${Number(id)}
+        AND NOT (status = 'bloqueada' AND ${status} = 'aprobada')
       RETURNING *
     `;
+    if (!updated.length) {
+      return fail(new Error("Esta propuesta está bloqueada por incumplir reglas críticas de la marca: corrígela antes de aprobarla."), 409);
+    }
     if (status === "aprobada" && updated[0]) {
       await ensurePipelineItem(updated[0]);
     }

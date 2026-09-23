@@ -28,6 +28,9 @@ export async function POST(
     if (!rows[0]) return fail(new Error("Enlace no válido"), 404);
 
     if (decision === "aprobar") {
+      if (rows[0].status === "bloqueada") {
+        return fail(new Error("Esta propuesta está en revisión interna y todavía no se puede aprobar."), 409);
+      }
       const updated = await sql<ProposalRow[]>`
         UPDATE proposals SET status = 'aprobada', client_feedback = NULL
         WHERE share_token = ${token}
