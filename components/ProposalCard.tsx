@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { stripEmphasis } from "@/lib/emphasis";
+import { pieceToText } from "@/lib/pastedPiece";
 import ReelCoverPicker from "./ReelCoverPicker";
 import CarouselCoverPicker from "./CarouselCoverPicker";
 import type { CoverLayout, ReelTemplate } from "@/lib/brandDesign";
@@ -56,6 +57,9 @@ export default function ProposalCard({
   const [shareCopied, setShareCopied] = useState(false);
   const [coverVersion, setCoverVersion] = useState(0);
   const [exemplar, setExemplar] = useState(isExemplar);
+  const [showReplace, setShowReplace] = useState(false);
+  const [replaceText, setReplaceText] = useState("");
+  const [replaceError, setReplaceError] = useState<string | null>(null);
   const isScript = formato === "guion_video";
 
   async function regenerate(text?: string) {
@@ -93,6 +97,35 @@ export default function ProposalCard({
     });
     setBusy(false);
     router.refresh();
+  }
+
+  /** Abre el editor con el texto actual de la pieza, listo para pegar la versión final. */
+  function openReplace() {
+    setReplaceText(pieceToText(formato, (isScript ? beats : slides) as never));
+    setReplaceError(null);
+    setShowReplace((v) => !v);
+  }
+
+  /** Guarda el texto tal cual: no pasa por el modelo, solo por el filtro de reglas. */
+  async function replace() {
+    setBusy(true);
+    setReplaceError(null);
+    try {
+      const res = await fetch(`/api/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "replace", texto: replaceText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error");
+      setShowReplace(false);
+      setCoverVersion((v) => v + 1);
+      router.refresh();
+    } catch (e) {
+      setReplaceError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   /** Marca la pieza como modelo a imitar por la IA en las próximas generaciones. */
@@ -232,6 +265,14 @@ export default function ProposalCard({
           >
             ✏️ Pedir cambios
           </button>
+          <button
+            onClick={openReplace}
+            disabled={busy}
+            title="Pega tu versión final: se guarda tal cual, sin pasar por la IA"
+            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+          >
+            📝 Reemplazar texto
+          </button>
           {status === "aprobada" && (
             <button
               onClick={toggleExemplar}
@@ -331,6 +372,34 @@ export default function ProposalCard({
         <p className="mt-3 rounded-lg border border-red-800/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           {qualityNotes || "Incumple reglas críticas de la marca."} · Corrígela con &quot;Pedir cambios&quot; antes de aprobarla.
         </p>
+      )}
+
+      {showReplace && (
+        <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+          <p className="text-xs text-zinc-500">
+            Tu versión final, tal cual: no pasa por la IA. Un bloque por {isScript ? "sección" : "slide"}, separados por
+            una línea en blanco{isScript ? '; la primera línea puede ser el nombre de la sección seguido de ":"' : "; la primera línea es el título"}.
+          </p>
+          <textarea
+            value={replaceText}
+            onChange={(e) => setReplaceText(e.target.value)}
+            rows={12}
+            className="mt-2 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+          />
+          {replaceError && <p className="mt-1.5 text-xs text-red-400">{replaceError}</p>}
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={replace}
+              disabled={busy || !replaceText.trim()}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {busy ? "Guardando…" : "Guardar esta versión"}
+            </button>
+            <button onClick={() => setShowReplace(false)} className="text-xs text-zinc-500 hover:text-zinc-300">
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       {isScript ? (

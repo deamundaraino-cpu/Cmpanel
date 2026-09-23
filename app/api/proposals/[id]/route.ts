@@ -6,6 +6,9 @@ import { chatJson } from "@/lib/llm";
 import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
 import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
 import { brandCoverLayouts } from "@/lib/brandDesign";
+import { buildExamplesBlock } from "@/lib/brandExamples";
+import { parseCarousel, parseScript, type Beat as PastedBeat, type Slide as PastedSlide } from "@/lib/pastedPiece";
+import { findViolations, isBlocking, structuralViolations } from "@/lib/brandRules";
 import {
   CarouselGen,
   ScriptGen,
@@ -117,7 +120,7 @@ export async function PATCH(
           }
         }
         const gen = await chatJson<ScriptGen>(
-          `Eres un guionista experto en video corto. Revisas guiones aplicando el feedback del creador SIN perder lo que ya funciona. Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}`,
+          `Eres un guionista experto en video corto. Revisas guiones aplicando el feedback del creador SIN perder lo que ya funciona. Si el feedback pide un cambio de fondo —ángulo, estructura, enfoque— reescribe el bloque completo; no lo retoques. Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}${await buildExamplesBlock(clientId, "guion_video")}`,
           `Guion actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la PRIMERA sección (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "...", "texto": "...", "edicion": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
         );
         if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion revisado"), 500);
@@ -139,7 +142,7 @@ export async function PATCH(
       }
 
       const gen = await chatJson<CarouselGen>(
-        `Eres un creador de carruseles virales de Instagram. Revisas carruseles aplicando el feedback del creador SIN perder lo que ya funciona. Cada slide: titulo (máx 60 caracteres) y cuerpo (máx 220). Primer slide = portada-gancho; último = CTA. Español, tono de la marca. En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}`,
+        `Eres un creador de carruseles virales de Instagram. Revisas carruseles aplicando el feedback del creador SIN perder lo que ya funciona. Si el feedback pide un cambio de fondo —ángulo, estructura, enfoque— reescribe el slide completo; no lo retoques. Cada slide: titulo (máx 60 caracteres) y cuerpo (máx 220). Primer slide = portada-gancho; último = CTA. Español, tono de la marca. En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}${await buildExamplesBlock(clientId, "carrusel")}`,
         `Carrusel actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió el carrusel revisado"), 500);
@@ -158,6 +161,39 @@ export async function PATCH(
         WHERE client_id = ${clientId} AND id = ${Number(id)}
       `;
       return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked });
+    }
+
+    // ————— Reemplazar el texto a mano (no pasa por el modelo) —————
+    if (body.action === "replace") {
+      const texto = String(body.texto || "").trim();
+      if (!texto) return fail(new Error("Pega el texto final"), 400);
+
+      const rows = await sql<ProposalRow[]>`
+        SELECT * FROM proposals WHERE client_id = ${clientId} AND id = ${Number(id)}
+      `;
+      const proposal = rows[0];
+      if (!proposal?.slides) return fail(new Error("Propuesta no encontrada"), 404);
+
+      const previo = JSON.parse(proposal.slides) as (PastedSlide & PastedBeat)[];
+      const piezas =
+        proposal.formato === "guion_video" ? parseScript(texto, previo) : parseCarousel(texto, previo);
+      if (!piezas.length) return fail(new Error("El texto no tiene bloques separados por línea en blanco"), 400);
+
+      // Se guarda tal cual: el filtro solo informa (y bloquea si hay críticos).
+      const banned = parseBannedRules(await getBrandBanned(clientId));
+      const violations = [...findViolations(JSON.stringify(piezas), banned), ...structuralViolations({ slides: piezas, beats: piezas })];
+      const blocked = isBlocking(violations);
+      const nota = violationsNote(violations);
+
+      await sql`
+        UPDATE proposals SET
+          slides = ${JSON.stringify(piezas)},
+          quality_notes = ${nota},
+          status = ${blocked ? "bloqueada" : proposal.status === "bloqueada" ? "pendiente" : proposal.status},
+          client_feedback = NULL
+        WHERE client_id = ${clientId} AND id = ${Number(id)}
+      `;
+      return NextResponse.json({ ok: true, reemplazado: piezas.length, bloqueada: blocked, avisos: violations });
     }
 
     // ————— Marcar como ejemplo para la IA —————
