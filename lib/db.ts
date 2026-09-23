@@ -108,6 +108,7 @@ export type StructureRow = {
   descripcion: string | null;
   beats: string;
   is_builtin: number;
+  client_id: number | null; // null = para todas las marcas del editor
 };
 
 export type CampaignRow = {

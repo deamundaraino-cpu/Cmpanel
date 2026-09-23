@@ -194,7 +194,10 @@ CREATE TABLE IF NOT EXISTS structures (
   descripcion TEXT,
   beats TEXT NOT NULL,
   is_builtin INTEGER DEFAULT 0,
-  CONSTRAINT structures_user_nombre_uni UNIQUE NULLS NOT DISTINCT (user_id, nombre)
+  -- Ámbito: NULL = disponible para todas las marcas del editor; con valor,
+  -- solo aparece en esa marca (cada cliente tiene su forma de guionizar).
+  client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
+  CONSTRAINT structures_user_cliente_nombre_uni UNIQUE NULLS NOT DISTINCT (user_id, client_id, nombre)
 );
 
 CREATE TABLE IF NOT EXISTS campaigns (

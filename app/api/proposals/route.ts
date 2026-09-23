@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
     const structures = await sql<StructureRow[]>`
       SELECT * FROM structures
       WHERE id = ${Number(structureId)} AND (user_id = ${userId} OR user_id IS NULL)
+        AND (client_id IS NULL OR client_id = ${clientId})
     `;
     const structure = structures[0];
     if (!structure) return fail(new Error("Estructura no encontrada"), 404);

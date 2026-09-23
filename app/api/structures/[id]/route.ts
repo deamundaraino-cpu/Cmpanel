@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   try {
-    const { nombre, descripcion, beats } = await req.json();
+    const { nombre, descripcion, beats, soloEstaMarca } = await req.json();
     if (typeof nombre !== "string" || !nombre.trim()) {
       return fail(new Error("Falta el nombre de la estructura"), 400);
     }
@@ -38,9 +38,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return fail(new Error("Esta estructura es una de las base: duplícala para poder editarla."), 404);
     }
 
+    const clientScope = soloEstaMarca ? auth.clientId : null;
+    if (soloEstaMarca && !clientScope) {
+      return fail(new Error("No hay una marca activa a la que asociar la estructura"), 409);
+    }
+
     const [updated] = await sql<{ id: number }[]>`
       UPDATE structures
-      SET nombre = ${nombre.trim()}, descripcion = ${descripcion || ""}, beats = ${JSON.stringify(clean)}
+      SET nombre = ${nombre.trim()}, descripcion = ${descripcion || ""},
+          beats = ${JSON.stringify(clean)}, client_id = ${clientScope}
       WHERE id = ${Number(id)} AND user_id = ${auth.userId}
       RETURNING id
     `;

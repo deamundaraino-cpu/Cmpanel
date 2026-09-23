@@ -111,6 +111,7 @@ export async function PATCH(
           const structures = await sql<StructureRow[]>`
             SELECT * FROM structures
             WHERE id = ${proposal.structure_id} AND (user_id = ${userId} OR user_id IS NULL)
+              AND (client_id IS NULL OR client_id = ${clientId})
           `;
           if (structures[0]) {
             const beats = JSON.parse(structures[0].beats) as StructureBeat[];

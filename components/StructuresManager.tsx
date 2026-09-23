@@ -10,6 +10,7 @@ type Structure = {
   descripcion: string | null;
   beats: string;
   is_builtin: number;
+  client_id: number | null;
 };
 
 const EMPTY_BEAT: Beat = { nombre: "", guia: "" };
@@ -20,17 +21,20 @@ function StructureForm({
   title,
   initial,
   busy,
+  clienteNombre,
   onSave,
   onCancel,
 }: {
   title: string;
-  initial?: { nombre: string; descripcion: string; beats: Beat[] };
+  initial?: { nombre: string; descripcion: string; beats: Beat[]; soloEstaMarca: boolean };
   busy: boolean;
-  onSave: (data: { nombre: string; descripcion: string; beats: Beat[] }) => void;
+  clienteNombre: string;
+  onSave: (data: { nombre: string; descripcion: string; beats: Beat[]; soloEstaMarca: boolean }) => void;
   onCancel: () => void;
 }) {
   const [nombre, setNombre] = useState(initial?.nombre || "");
   const [descripcion, setDescripcion] = useState(initial?.descripcion || "");
+  const [soloEstaMarca, setSoloEstaMarca] = useState(initial?.soloEstaMarca ?? true);
   const [beats, setBeats] = useState<Beat[]>(initial?.beats?.length ? initial.beats : [{ ...EMPTY_BEAT }, { ...EMPTY_BEAT }]);
 
   const updateBeat = (i: number, field: keyof Beat, value: string) =>
@@ -65,6 +69,18 @@ function StructureForm({
           placeholder="Para qué tipo de video funciona mejor"
           className={`mt-1 w-full ${INPUT}`}
         />
+      </label>
+
+      <label className="block">
+        <span className="text-xs font-medium text-zinc-400">Dónde se usa</span>
+        <select
+          value={soloEstaMarca ? "marca" : "todas"}
+          onChange={(e) => setSoloEstaMarca(e.target.value === "marca")}
+          className={`mt-1 w-full ${INPUT}`}
+        >
+          <option value="marca">Solo {clienteNombre}</option>
+          <option value="todas">Todas mis marcas</option>
+        </select>
       </label>
 
       <div>
@@ -124,7 +140,7 @@ function StructureForm({
 
       <div className="flex gap-2">
         <button
-          onClick={() => onSave({ nombre, descripcion, beats })}
+          onClick={() => onSave({ nombre, descripcion, beats, soloEstaMarca })}
           disabled={busy || !nombre.trim()}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
         >
@@ -141,7 +157,7 @@ function StructureForm({
   );
 }
 
-export default function StructuresManager() {
+export default function StructuresManager({ clienteNombre }: { clienteNombre: string }) {
   const [structures, setStructures] = useState<Structure[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -161,7 +177,7 @@ export default function StructuresManager() {
 
   useEffect(load, []);
 
-  async function save(data: { nombre: string; descripcion: string; beats: Beat[] }, id?: number) {
+  async function save(data: { nombre: string; descripcion: string; beats: Beat[]; soloEstaMarca: boolean }, id?: number) {
     setBusy(true);
     setMsg(null);
     try {
@@ -189,13 +205,12 @@ export default function StructuresManager() {
 
   /** Las base son compartidas: se copian para poder ajustarlas sin tocar el original. */
   async function duplicate(s: Structure) {
-    await save(
-      {
-        nombre: `${s.nombre} (mi versión)`,
-        descripcion: s.descripcion || "",
-        beats: JSON.parse(s.beats) as Beat[],
-      }
-    );
+    await save({
+      nombre: `${s.nombre} (${clienteNombre})`,
+      descripcion: s.descripcion || "",
+      beats: JSON.parse(s.beats) as Beat[],
+      soloEstaMarca: true,
+    });
   }
 
   async function deleteStructure(id: number) {
@@ -218,8 +233,14 @@ export default function StructuresManager() {
             <div key={s.id} className="rounded-xl border border-indigo-700/60 bg-zinc-900 p-5">
               <StructureForm
                 title={`Editando: ${s.nombre}`}
-                initial={{ nombre: s.nombre, descripcion: s.descripcion || "", beats }}
+                initial={{
+                  nombre: s.nombre,
+                  descripcion: s.descripcion || "",
+                  beats,
+                  soloEstaMarca: s.client_id != null,
+                }}
                 busy={busy}
+                clienteNombre={clienteNombre}
                 onSave={(data) => save(data, s.id)}
                 onCancel={() => setEditing(null)}
               />
@@ -234,6 +255,15 @@ export default function StructuresManager() {
                   <p className="font-medium">{s.nombre}</p>
                   {!!s.is_builtin && (
                     <span className="rounded-md bg-indigo-600/15 px-1.5 py-0.5 text-xs text-indigo-300">Base</span>
+                  )}
+                  {!s.is_builtin && (
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-xs ${
+                        s.client_id != null ? "bg-emerald-600/15 text-emerald-300" : "bg-zinc-700/40 text-zinc-300"
+                      }`}
+                    >
+                      {s.client_id != null ? `Solo ${clienteNombre}` : "Todas mis marcas"}
+                    </span>
                   )}
                 </div>
                 {s.descripcion && <p className="mt-1 text-sm text-zinc-400">{s.descripcion}</p>}
@@ -297,7 +327,13 @@ export default function StructuresManager() {
         </button>
       ) : (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <StructureForm title="Nueva estructura" busy={busy} onSave={(data) => save(data)} onCancel={() => setShowForm(false)} />
+          <StructureForm
+            title="Nueva estructura"
+            busy={busy}
+            clienteNombre={clienteNombre}
+            onSave={(data) => save(data)}
+            onCancel={() => setShowForm(false)}
+          />
         </div>
       )}
     </div>
