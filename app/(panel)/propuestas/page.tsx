@@ -3,6 +3,7 @@ import { requireClient } from "@/lib/auth";
 import ProposalCard from "@/components/ProposalCard";
 import { getBrandDesign } from "@/lib/brand";
 import { listPhotoMeta } from "@/lib/brandPhotos";
+import { countExemplars } from "@/lib/brandExamples";
 import { brandCoverLayouts, brandReelTemplates } from "@/lib/brandDesign";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +11,11 @@ export const dynamic = "force-dynamic";
 export default async function ProposalsPage() {
   const { clientId } = await requireClient();
   const sql = getSql();
-  const [proposals, design, photos] = await Promise.all([
+  const [proposals, design, photos, exemplars] = await Promise.all([
     sql<ProposalRow[]>`SELECT * FROM proposals WHERE client_id = ${clientId} ORDER BY id DESC`,
     getBrandDesign(clientId),
     listPhotoMeta(clientId),
+    countExemplars(clientId),
   ]);
   // Solo las composiciones que el esquema de la marca tiene activas, en su orden.
   const reelTemplates = brandReelTemplates(design);
@@ -45,6 +47,8 @@ export default async function ProposalsPage() {
               reelTemplates={reelTemplates}
               coverLayouts={coverLayouts}
               photos={coverPhotos}
+              isExemplar={p.is_exemplar}
+              exemplarCount={exemplars[p.formato || "otro"] || 0}
               caption={p.caption || ""}
               hashtags={p.hashtags ? JSON.parse(p.hashtags) : []}
               quality={p.quality}

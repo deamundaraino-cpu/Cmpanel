@@ -155,7 +155,9 @@ CREATE TABLE IF NOT EXISTS proposals (
   -- Trazabilidad de pilar: de qué idea salió y a qué pilar pertenece,
   -- para poder medir la mezcla real de contenido producido.
   pilar TEXT,
-  idea_id BIGINT REFERENCES ideas(id) ON DELETE SET NULL
+  idea_id BIGINT REFERENCES ideas(id) ON DELETE SET NULL,
+  -- Ejemplos que el editor marca a mano para que la IA los imite.
+  is_exemplar BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- lead_counts: leads captados por semana, introducidos a mano. Es el único

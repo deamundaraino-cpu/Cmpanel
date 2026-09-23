@@ -25,6 +25,8 @@ export default function ProposalCard({
   reelTemplates,
   coverLayouts,
   photos,
+  isExemplar,
+  exemplarCount,
 }: {
   id: number;
   status: string;
@@ -39,6 +41,8 @@ export default function ProposalCard({
   clientFeedback?: string | null;
   reelTemplates: ReelTemplate[];
   coverLayouts: CoverLayout[];
+  isExemplar: boolean;
+  exemplarCount: number;
   photos: { id: string; hasCutout: boolean }[];
 }) {
   const router = useRouter();
@@ -51,6 +55,7 @@ export default function ProposalCard({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [coverVersion, setCoverVersion] = useState(0);
+  const [exemplar, setExemplar] = useState(isExemplar);
   const isScript = formato === "guion_video";
 
   async function regenerate(text?: string) {
@@ -88,6 +93,25 @@ export default function ProposalCard({
     });
     setBusy(false);
     router.refresh();
+  }
+
+  /** Marca la pieza como modelo a imitar por la IA en las próximas generaciones. */
+  async function toggleExemplar() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "exemplar", value: !exemplar }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setExemplar(json.is_exemplar);
+        router.refresh();
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function share() {
@@ -208,6 +232,25 @@ export default function ProposalCard({
           >
             ✏️ Pedir cambios
           </button>
+          {status === "aprobada" && (
+            <button
+              onClick={toggleExemplar}
+              disabled={busy}
+              title={
+                exemplar
+                  ? "La IA imita esta pieza al generar contenido de este formato"
+                  : "Marcarla para que la IA la imite en las próximas generaciones"
+              }
+              className={`rounded-lg px-3 py-1.5 text-sm transition disabled:opacity-50 ${
+                exemplar ? "bg-indigo-600/25 text-indigo-200 hover:bg-indigo-600/40" : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+              }`}
+            >
+              {exemplar ? "★ Ejemplo de la marca" : "☆ Usar como ejemplo"}
+              <span className="ml-1.5 text-xs text-zinc-400">
+                {exemplarCount}/3 {isScript ? "guiones" : "carruseles"}
+              </span>
+            </button>
+          )}
           {status === "aprobada" && (
             <a
               href={`/api/proposals/${id}/download`}

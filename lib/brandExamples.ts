@@ -41,16 +41,29 @@ function scriptExample(row: ProposalRow): string | null {
   }
 }
 
+/** Cuántas piezas hay marcadas como ejemplo, por formato (para mostrarlo en la UI). */
+export async function countExemplars(clientId: number): Promise<Record<string, number>> {
+  const sql = getSql();
+  const rows = await sql<{ formato: string | null; n: number }[]>`
+    SELECT formato, count(*)::int AS n FROM proposals
+    WHERE client_id = ${clientId} AND is_exemplar = TRUE AND status = 'aprobada'
+    GROUP BY formato
+  `;
+  return Object.fromEntries(rows.map((r) => [r.formato || "otro", r.n]));
+}
+
 /**
  * Bloque de ejemplos para inyectar en el prompt. Vacío si la marca aún no ha
  * aprobado piezas de ese formato: en ese caso no hay nada que imitar.
  */
 export async function buildExamplesBlock(clientId: number, formato: "carrusel" | "guion_video"): Promise<string> {
   const sql = getSql();
+  // Manda lo que el editor marcó a mano; la autoevaluación de la IA no decide
+  // qué imita la IA. A igualdad, las más recientes.
   const rows = await sql<ProposalRow[]>`
     SELECT * FROM proposals
     WHERE client_id = ${clientId} AND status = 'aprobada' AND formato = ${formato}
-    ORDER BY quality DESC NULLS LAST, id DESC
+    ORDER BY is_exemplar DESC, id DESC
     LIMIT ${MAX_EXAMPLES}
   `;
   const examples = rows

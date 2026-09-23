@@ -160,6 +160,17 @@ export async function PATCH(
       return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked });
     }
 
+    // ————— Marcar como ejemplo para la IA —————
+    if (body.action === "exemplar") {
+      const [row] = await sql<ProposalRow[]>`
+        UPDATE proposals SET is_exemplar = ${!!body.value}
+        WHERE client_id = ${clientId} AND id = ${Number(id)} AND status = 'aprobada'
+        RETURNING *
+      `;
+      if (!row) return fail(new Error("Solo las propuestas aprobadas pueden usarse como ejemplo."), 409);
+      return NextResponse.json({ ok: true, is_exemplar: row.is_exemplar });
+    }
+
     // ————— Cambio de estado —————
     const { status } = body;
     if (!["aprobada", "rechazada", "pendiente"].includes(status)) {

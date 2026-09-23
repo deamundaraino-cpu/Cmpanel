@@ -95,6 +95,7 @@ export type ProposalRow = {
   client_feedback: string | null;
   pilar: string | null;
   idea_id: number | null;
+  is_exemplar: boolean;
 };
 
 export type StructureBeat = { nombre: string; guia: string };
