@@ -435,9 +435,19 @@ function detras(args: Args) {
   if (!photo?.cutout) return centro(args);
   const ctx = ctxOf(style);
   const toks = tokens(text, ctx.upper);
-  const keyword = toks.filter((t) => t.strong).map((t) => ({ ...t, strong: false }));
-  const rest = toks.filter((t) => !t.strong);
-  const kwZone = { x: 40, y: 240, w: W - 80, h: 560 };
+  // La frase se lee en orden: lo que va ANTES de la palabra clave, encima y
+  // pequeño; la palabra clave, gigante detrás de la cabeza; lo que va DESPUÉS,
+  // abajo. Antes todo lo no resaltado se mandaba abajo y una frase como
+  // "Tus anuncios funcionan, **tu oferta no**" se leía al revés.
+  const first = toks.findIndex((t) => t.strong);
+  const last = toks.length - 1 - [...toks].reverse().findIndex((t) => t.strong);
+  const before = first > 0 ? toks.slice(0, first) : [];
+  const keyword = (first >= 0 ? toks.slice(first, last + 1) : toks).map((t) => ({ ...t, strong: false }));
+  const rest = first >= 0 ? toks.slice(last + 1) : [];
+  const preZone = { x: M, y: 240, w: W - 2 * M, h: 190 };
+  const preLines = before.length ? fitLines(before, preZone, { m: ctx.m, maxSize: 110, maxLines: 2 }) : [];
+  const preH = preLines.reduce((s, l) => s + Math.round(l.size * LINE_HEIGHT), 0);
+  const kwZone = { x: 40, y: preLines.length ? 240 + preH + 20 : 240, w: W - 80, h: 560 };
   const kwLines = fitLines(keyword, kwZone, { m: ctx.m, maxSize: 520, maxLines: 1 });
   // La cabeza tapa solo el tercio inferior de la palabra clave: sigue legible.
   const kwSize = kwLines[0]?.size || 300;
@@ -447,6 +457,11 @@ function detras(args: Args) {
   return (
     <Root theme={theme} ctx={ctx}>
       <Backdrop theme={theme} photo={photo} ctx={ctx} />
+      {preLines.length ? (
+        <Zoned zone={preZone} justify="flex-start" align="center">
+          <TextLines lines={preLines} align="center" theme={theme} ctx={ctx} />
+        </Zoned>
+      ) : null}
       <Zoned zone={kwZone} justify="flex-start" align="center">
         <TextLines lines={kwLines} align="center" theme={theme} ctx={ctx} color={theme.accent} />
       </Zoned>

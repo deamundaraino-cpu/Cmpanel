@@ -2,6 +2,7 @@ import { getSql } from "./db";
 import { getSettings, setSetting } from "./settings";
 import { createCache } from "./memoCache";
 import { compressCutout } from "./imageCompress";
+import { cleanCutout, CUTOUT_CLEAN_VERSION } from "./cutoutCleanup";
 import type { BrandPhoto, Cutout } from "./slide";
 
 // Cada foto vive en su propia fila de `settings` (brand_photo_<id> y
@@ -176,8 +177,13 @@ export function chooseCoverPhoto(meta: PhotoMeta[], seed: string): PhotoMeta | n
  */
 async function optimizarCutout(cutout: Cutout | null): Promise<Cutout | null> {
   if (!cutout?.src) return cutout;
-  const out = await compressCutout(cutout.src);
-  return out ? { ...cutout, src: out.dataUrl, w: out.width, h: out.height } : cutout;
+  // Primero se limpia (islas y parte baja rota de MODNet), luego se comprime.
+  const limpio = await cleanCutout(cutout.src);
+  const base: Cutout = limpio
+    ? { src: limpio.dataUrl, w: limpio.width, h: limpio.height, limpio: CUTOUT_CLEAN_VERSION }
+    : cutout;
+  const out = await compressCutout(base.src);
+  return out ? { ...base, src: out.dataUrl, w: out.width, h: out.height } : base;
 }
 
 export async function addBrandPhoto(clientId: number, src: string, cutout: Cutout | null): Promise<string> {

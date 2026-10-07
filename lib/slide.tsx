@@ -69,7 +69,8 @@ export { parseEmphasis, stripEmphasis };
 
 export type Slide = { titulo: string; cuerpo: string; layout?: CoverLayout; foto?: string };
 
-export type Cutout = { src: string; w: number; h: number };
+/** `limpio`: versión de lib/cutoutCleanup.ts aplicada (ausente = recorte crudo). */
+export type Cutout = { src: string; w: number; h: number; limpio?: number };
 export type BrandPhoto = { src: string; cutout?: Cutout | null };
 
 export type BrandStyle = {
