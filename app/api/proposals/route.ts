@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardClient, fail } from "@/lib/api";
-import { getSql, PostRow, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
-import { chatJson } from "@/lib/llm";
-import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
-import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
-import { buildExamplesBlock } from "@/lib/brandExamples";
-import { brandCoverLayouts } from "@/lib/brandDesign";
-import {
-  CarouselGen,
-  ScriptGen,
-  QUALITY_BAR,
-  EDIT_NOTES_INSTRUCTION,
-  clampQuality,
-  applyCoverLayout,
-  coverLayoutInstruction,
-  applyCoverTexts,
-  COVER_TEXTS_INSTRUCTION,
-} from "@/lib/proposalGen";
+import { getSql, PostRow, ProposalRow } from "@/lib/db";
+import { buildIdeaContext, type IdeaSource } from "@/lib/ideaContext";
+import { createCarousel, createScripts, GenError } from "@/lib/proposalCreate";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { toPilar } from "@/lib/pilares";
+import { executionContext } from "@/lib/executionFormats";
 
 export const maxDuration = 120;
 
@@ -35,7 +22,9 @@ export async function GET() {
 async function describeSource(
   clientId: number,
   postId: string | undefined,
-  tema: string | undefined
+  tema: string | undefined,
+  /** Idea del panel: trae ángulo, razón y evidencia, mejor materia prima que el tema suelto. */
+  idea: IdeaSource | null
 ): Promise<{ context: string; sourcePostId: string | null }> {
   if (postId) {
     const sql = getSql();
@@ -49,10 +38,14 @@ async function describeSource(
       context: `Este post fue un GANADOR en Instagram (nota ${post.score}/10, alcance ${post.reach}, ${post.saved} guardados, ${post.shares} compartidos):\n\nCaption original:\n"""${(post.caption || "").slice(0, 800)}"""\n\nParte de esta misma idea/tema, pero elévala con un ángulo fresco (no copies el caption).`,
     };
   }
+  // Cuando la pieza sale de una idea del panel se usa la fila real y no el texto
+  // que manda el navegador: ahí están el ángulo y la evidencia, que es lo que
+  // hace distinta cada pieza.
+  if (idea) return { sourcePostId: null, context: buildIdeaContext(idea) };
   if (tema) {
     return {
       sourcePostId: null,
-      context: `Este es el tema/idea de partida:\n"""${String(tema).slice(0, 500)}"""`,
+      context: `Este es el tema/idea de partida:\n"""${String(tema).slice(0, 1200)}"""`,
     };
   }
   throw new Error("Falta postId o tema");
@@ -63,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { userId, clientId } = auth;
   try {
-    const { postId, tema, formato, structureId, ideaId, pilar } = await req
+    const { postId, tema, formato, structureId, ideaId, pilar, formatoGrabacion } = await req
       .json()
       .catch(() => ({}));
     const sql = getSql();
@@ -72,27 +65,25 @@ export async function POST(req: NextRequest) {
     // confía en lo que mande el navegador (y evita idea_id de otro cliente).
     let ideaRef: number | null = null;
     let pilarRef: string | null = null;
+    let ideaSource: IdeaSource | null = null;
     if (ideaId) {
-      const [idea] = await sql<{ id: number; pilar: string | null }[]>`
-        SELECT id, pilar FROM ideas
+      const [idea] = await sql<(IdeaSource & { id: number; pilar: string | null })[]>`
+        SELECT id, pilar, tema, tesis, angulo, razon, evidencia, ganchos FROM ideas
         WHERE client_id = ${clientId} AND id = ${Number(ideaId)}
       `;
       if (idea) {
         ideaRef = idea.id;
         pilarRef = toPilar(idea.pilar);
+        ideaSource = idea;
       }
     }
     if (!pilarRef) pilarRef = toPilar(pilar);
-    const brief = await buildBrandBrief(clientId);
-    const coverLayouts = brandCoverLayouts(await getBrandDesign(clientId));
-    const banned = parseBannedRules(await getBrandBanned(clientId));
-    // El corrector trabaja con la misma ficha (que ya incluye el manual de la marca).
-    const repairSystem = `Eres un editor que corrige textos para que cumplan las reglas inviolables de la marca, sin cambiar lo que ya funciona ni el idioma local.\n\nFicha de marca:\n${brief}`;
     const kind = formato === "guion_video" ? "guion_video" : "carrusel";
+    if (kind === "guion_video" && !structureId) return fail(new Error("Falta la estructura de guion"), 400);
 
     let source: { context: string; sourcePostId: string | null };
     try {
-      source = await describeSource(clientId, postId, tema);
+      source = await describeSource(clientId, postId, tema, ideaSource);
     } catch (e) {
       return fail(e, 400);
     }
@@ -100,65 +91,20 @@ export async function POST(req: NextRequest) {
     const quota = await consumeQuota(userId, "proposal");
     if (!quota.ok) return quotaExceeded(quota);
 
+    const ctx = { userId, clientId, context: source.context, sourcePostId: source.sourcePostId, pilarRef, ideaRef };
     if (kind === "carrusel") {
-      const ejemplos = await buildExamplesBlock(clientId, "carrusel");
-      const gen = await chatJson<CarouselGen>(
-        `Eres un creador de carruseles virales de Instagram. Escribes en español, directo, con ganchos fuertes, en el tono de voz de la marca y pensando en su cliente ideal. Cada slide: titulo corto y potente (máx 60 caracteres) y cuerpo de apoyo (máx 220 caracteres). El primer slide es la portada-gancho (cuerpo breve o vacío). El último slide es el CTA (seguir, guardar, comentar). En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}${ejemplos}`,
-        `${source.context}\n\nCrea un carrusel de 6-7 slides.\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "caption completo para el post con salto de líneas y CTA", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags mezclando volumen alto y nicho.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
-      );
-      if (!gen.slides?.length) return fail(new Error("La IA no devolvió slides"), 500);
-      const checked = await enforceBrandRules(gen, banned, repairSystem);
-      const q = clampQuality(checked.gen.calidad);
-      const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
-      // Un error factual o de compliance que sobrevive a la reparación no se
-      // publica: queda bloqueado para revisión.
-      const estado = checked.blocked ? "bloqueada" : "pendiente";
-
-      const [row] = await sql<{ id: number }[]>`
-        INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
-        VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, ${estado}, 'carrusel',
-          ${JSON.stringify(applyCoverLayout(checked.gen, coverLayouts))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
-          NULL, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
-        RETURNING id
-      `;
-      return NextResponse.json({ ok: true, id: row.id, slides: checked.gen.slides.length, bloqueada: checked.blocked, avisos: checked.violations });
+      const c = await createCarousel(ctx);
+      return NextResponse.json({ ok: true, id: c.id, slides: c.slides, bloqueada: c.bloqueada, avisos: c.avisos });
     }
 
-    // --- guion_video ---
-    if (!structureId) return fail(new Error("Falta la estructura de guion"), 400);
-    // Las estructuras son la librería del EDITOR (compartida entre sus clientes).
-    const structures = await sql<StructureRow[]>`
-      SELECT * FROM structures
-      WHERE id = ${Number(structureId)} AND (user_id = ${userId} OR user_id IS NULL)
-        AND (client_id IS NULL OR client_id = ${clientId})
-    `;
-    const structure = structures[0];
-    if (!structure) return fail(new Error("Estructura no encontrada"), 404);
-    const beats = JSON.parse(structure.beats) as StructureBeat[];
-
-    const beatsGuide = beats.map((b, i) => `${i + 1}. ${b.nombre}: ${b.guia}`).join("\n");
-    const beatNames = beats.map((b) => b.nombre);
-
-    const ejemplos = await buildExamplesBlock(clientId, "guion_video");
-    const gen = await chatJson<ScriptGen>(
-      `Eres un guionista experto en contenido de video corto (Reels, TikTok, Shorts) que domina estructuras probadas de retención y trabaja mano a mano con editores de video. Escribes en español, en el tono de voz de la marca, pensando en su cliente ideal. Escribes el texto EXACTO que la persona debe decir a cámara en cada sección (no descripciones ni instrucciones, el guion real hablado).\n\nFicha de marca:\n${brief}${ejemplos}`,
-      `${source.context}\n\nEscribe un guion de video siguiendo EXACTAMENTE esta estructura, en este orden, respetando la intención de cada sección:\n${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la sección "${beatNames[0]}" (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "${beatNames[0]}", "texto": "guion hablado de esta sección", "edicion": "indicaciones de edición de esta sección"}, ...], "caption": "descripción/copy corto para acompañar el video al publicarlo", "hashtags": ["#...", "#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\nUsa exactamente estos nombres de sección en el mismo orden: ${beatNames.join(", ")}. 10-15 hashtags.\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
-    );
-    if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion"), 500);
-    const checked = await enforceBrandRules(gen, banned, repairSystem);
-    const q = clampQuality(checked.gen.calidad);
-    const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
-    const estado = checked.blocked ? "bloqueada" : "pendiente";
-
-    const [row] = await sql<{ id: number }[]>`
-      INSERT INTO proposals (client_id, post_id, created_at, status, formato, slides, caption, hashtags, structure_id, quality, quality_notes, pilar, idea_id)
-      VALUES (${clientId}, ${source.sourcePostId}, ${new Date().toISOString()}, ${estado}, 'guion_video',
-        ${JSON.stringify(applyCoverTexts(checked.gen))}, ${checked.gen.caption || ""}, ${JSON.stringify(checked.gen.hashtags || [])},
-        ${structure.id}, ${q.score}, ${notes}, ${pilarRef}, ${ideaRef})
-      RETURNING id
-    `;
-    return NextResponse.json({ ok: true, id: row.id, beats: checked.gen.beats.length, bloqueada: checked.blocked, avisos: checked.violations });
+    // El formato de grabación (pizarra, pantalla verde…) ajusta guion y notas de edición.
+    const creadas = await createScripts({
+      ...ctx,
+      context: ctx.context + executionContext(typeof formatoGrabacion === "string" ? formatoGrabacion : null),
+      structureId: Number(structureId),
+    });
+    return NextResponse.json({ ok: true, id: creadas[0].id, variantes: creadas });
   } catch (e) {
-    return fail(e);
+    return fail(e, e instanceof GenError ? e.status : 500);
   }
 }

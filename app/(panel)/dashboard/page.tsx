@@ -8,6 +8,7 @@ import { formatBreakdown, dayOfWeekBreakdown } from "@/lib/metrics";
 import { requireClient } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
+import ExprimirButton from "@/components/ExprimirButton";
 import BrainCard from "@/components/BrainCard";
 import HealthScoreCard from "@/components/HealthScoreCard";
 import PilarMixCard from "@/components/PilarMixCard";
@@ -192,6 +193,7 @@ export default async function Dashboard() {
               <span className="shrink-0 text-xs text-zinc-500 tabular-nums">
                 {pct(p.er)} ER
               </span>
+              {p.is_winner ? <ExprimirButton postId={p.id} compact /> : null}
             </li>
           ))}
           {!top.length && (

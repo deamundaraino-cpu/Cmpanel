@@ -30,6 +30,7 @@ const KEYS = [
   "brand_rules",
   "brand_banned",
   "content_target_per_week",
+  "audience_voice",
 ];
 
 const SECRET_KEYS = new Set(["ig_token"]);

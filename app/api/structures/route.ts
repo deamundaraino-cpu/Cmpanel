@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, fail } from "@/lib/api";
 import { getSql, StructureRow, StructureBeat } from "@/lib/db";
+import { toPilar } from "@/lib/pilares";
 
 export async function GET() {
   const auth = await guard();
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { userId } = auth;
   try {
-    const { nombre, descripcion, beats, soloEstaMarca } = await req.json();
+    const { nombre, descripcion, beats, soloEstaMarca, pilar } = await req.json();
     if (typeof nombre !== "string" || !nombre.trim()) {
       return fail(new Error("Falta el nombre de la estructura"), 400);
     }
@@ -47,9 +48,9 @@ export async function POST(req: NextRequest) {
 
     const sql = getSql();
     const [row] = await sql<{ id: number }[]>`
-      INSERT INTO structures (user_id, created_at, nombre, descripcion, beats, is_builtin, client_id)
+      INSERT INTO structures (user_id, created_at, nombre, descripcion, beats, is_builtin, client_id, pilar)
       VALUES (${userId}, ${new Date().toISOString()}, ${nombre.trim()}, ${descripcion || ""},
-        ${JSON.stringify(clean)}, 0, ${clientScope})
+        ${JSON.stringify(clean)}, 0, ${clientScope}, ${toPilar(pilar)})
       ON CONFLICT (user_id, client_id, nombre) DO NOTHING
       RETURNING id
     `;

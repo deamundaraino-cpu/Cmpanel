@@ -1,4 +1,4 @@
-import { chatJson } from "./llm";
+import { chatJson, TEMP } from "./llm";
 
 // Verificación determinista de las reglas duras de una marca. El manual va en
 // el prompt, pero los modelos se lo saltan: inventan normativa, citan artículos
@@ -154,19 +154,34 @@ function repairPrompt(gen: unknown, violations: Violation[]): string {
 export async function enforceBrandRules<T>(
   gen: T,
   rules: BannedRule[],
-  system: string
+  system: string,
+  /**
+   * Chequeos extra sobre la pieza completa (p. ej. la repetición de gancho y
+   * cierre de lib/diversity.ts). Son opcionales para no tocar las llamadas que
+   * solo miran la lista de la marca.
+   */
+  extraChecks: ((g: unknown) => Violation[])[] = []
 ): Promise<{ gen: T; violations: Violation[]; blocked: boolean }> {
+  const check = (g: unknown): Violation[] => [
+    ...findViolations(JSON.stringify(g), rules),
+    ...structuralViolations(g),
+    ...extraChecks.flatMap((f) => f(g)),
+  ];
+
   let best = gen;
-  let violations = [...findViolations(JSON.stringify(gen), rules), ...structuralViolations(gen)];
+  let violations = check(gen);
   if (!violations.length) return { gen, violations, blocked: false };
 
   const attempts = isBlocking(violations) ? CRITICAL_ATTEMPTS : STYLE_ATTEMPTS;
   for (let i = 0; i < attempts && violations.length; i++) {
     try {
-      const fixed = await chatJson<T>(system, repairPrompt(best, violations));
-      const left = [...findViolations(JSON.stringify(fixed), rules), ...structuralViolations(fixed)];
-      // Solo se acepta la reescritura si mejora; si empeora, se conserva la anterior.
-      if (left.length < violations.length) {
+      const fixed = await chatJson<T>(system, repairPrompt(best, violations), { temperature: TEMP.reparacion });
+      const left = check(fixed);
+      // Solo se acepta la reescritura si mejora. Y nunca si introduce un error
+      // crítico donde no lo había: cambiar una muletilla por normativa inventada
+      // no es una mejora aunque baje el número de infracciones.
+      const meteCritico = isBlocking(left) && !isBlocking(violations);
+      if (left.length < violations.length && !meteCritico) {
         best = fixed;
         violations = left;
       }

@@ -1,5 +1,6 @@
 import { getSql, PostRow } from "./db";
 import { extractWinningHooks } from "./hooks";
+import { median } from "./stats";
 
 /**
  * Engagement ponderado: guardados y compartidos pesan más porque son
@@ -18,16 +19,10 @@ export function engagementRate(p: {
   return weighted / base;
 }
 
-function median(values: number[]): number {
-  if (!values.length) return 0;
-  const s = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
-
 /**
- * Recalcula ER, nota 1-10 (por percentil frente a tu propia media)
- * y marca ganadores (ER >= 1.5x mediana con alcance >= mediana).
+ * Recalcula ER, nota 1-10 (por percentil frente a tu propia media),
+ * marca ganadores (ER >= 1.5x mediana con alcance >= mediana) y guarda el
+ * ratio ER/mediana de cada post (perf_ratio).
  */
 export async function recomputeScores(clientId: number): Promise<{ scored: number; winners: number }> {
   const sql = getSql();
@@ -53,13 +48,15 @@ export async function recomputeScores(clientId: number): Promise<{ scored: numbe
     const score = Math.round((1 + percentile * 9) * 10) / 10;
     const isWinner = medEr > 0 && p.er >= 1.5 * medEr && p.reach >= medReach ? 1 : 0;
     winners += isWinner;
-    return { id: p.id, er: p.er, score, is_winner: isWinner };
+    // ×N frente a la mediana: lo que se muestra al medir una prueba de formato.
+    const perfRatio = medEr > 0 ? Math.round((p.er / medEr) * 100) / 100 : null;
+    return { id: p.id, er: p.er, score, is_winner: isWinner, perf_ratio: perfRatio };
   });
 
   await sql.begin(async (tx) => {
     for (const u of updates) {
       await tx`
-        UPDATE posts SET er = ${u.er}, score = ${u.score}, is_winner = ${u.is_winner}
+        UPDATE posts SET er = ${u.er}, score = ${u.score}, is_winner = ${u.is_winner}, perf_ratio = ${u.perf_ratio}
         WHERE client_id = ${clientId} AND id = ${u.id}
       `;
     }

@@ -1,5 +1,7 @@
 import { getSql } from "./db";
 import { getSettings, setSetting } from "./settings";
+import { createCache } from "./memoCache";
+import { compressCutout } from "./imageCompress";
 import type { BrandPhoto, Cutout } from "./slide";
 
 // Cada foto vive en su propia fila de `settings` (brand_photo_<id> y
@@ -123,10 +125,36 @@ export function chooseAvatarPhoto(meta: PhotoMeta[]): PhotoMeta | null {
   return meta.find((m) => m.avatar) || meta.find((m) => m.cover) || meta[0] || null;
 }
 
+/**
+ * Las fotos son lo más pesado de la base (recortes de hasta 2,4 MB) y lo que
+ * más se relee: una sola visita a la página de marca pinta 10 composiciones con
+ * la misma cara. Sin caché eso eran ~35 MB de egress por visita, y con
+ * `no-store` en las imágenes se repetía en cada recarga.
+ *
+ * TTL corto y tope bajo a propósito: la memoria de una función serverless es
+ * limitada y cada entrada puede pesar megas. Las escrituras invalidan la marca
+ * entera, así que el editor nunca ve su foto anterior.
+ */
+const FOTO_TTL_MS = 10 * 60 * 1000;
+const FOTO_MAX = 8;
+const fotoCache = createCache<BrandPhoto | null>({ ttlMs: FOTO_TTL_MS, max: FOTO_MAX });
+
+function olvidarFotos(clientId: number): void {
+  fotoCache.invalidatePrefix(`${clientId}:`);
+}
+
+/** Para comprobar el ahorro desde un script de diagnóstico. */
+export const photoCacheStats = () => fotoCache.stats();
+
 export async function loadPhoto(clientId: number, id: string): Promise<BrandPhoto | null> {
+  const key = `${clientId}:${id}`;
+  const cached = fotoCache.get(key);
+  if (cached !== undefined) return cached;
   const rows = await getSettings(clientId, [`brand_photo_${id}`, `brand_cutout_${id}`]);
   const src = rows[`brand_photo_${id}`];
-  return src ? { src, cutout: parseCutout(rows[`brand_cutout_${id}`]) } : null;
+  const foto = src ? { src, cutout: parseCutout(rows[`brand_cutout_${id}`]) } : null;
+  fotoCache.set(key, foto);
+  return foto;
 }
 
 /**
@@ -141,20 +169,34 @@ export function chooseCoverPhoto(meta: PhotoMeta[], seed: string): PhotoMeta | n
   return fallback.length ? fallback[hashString(seed) % fallback.length] : null;
 }
 
+/**
+ * Recomprime el recorte antes de guardarlo. El navegador lo produce con
+ * canvas.toDataURL("image/png"), que no deja elegir compresión: llegaban PNG de
+ * hasta 2,4 MB que después se releían de Postgres en cada render.
+ */
+async function optimizarCutout(cutout: Cutout | null): Promise<Cutout | null> {
+  if (!cutout?.src) return cutout;
+  const out = await compressCutout(cutout.src);
+  return out ? { ...cutout, src: out.dataUrl, w: out.width, h: out.height } : cutout;
+}
+
 export async function addBrandPhoto(clientId: number, src: string, cutout: Cutout | null): Promise<string> {
   const meta = await listPhotoMeta(clientId);
   if (meta.length >= MAX_PHOTOS) throw new Error(`Máximo ${MAX_PHOTOS} fotos.`);
   const id = Math.random().toString(36).slice(2, 10);
   await setSetting(clientId, `brand_photo_${id}`, src);
-  if (cutout) await setSetting(clientId, `brand_cutout_${id}`, JSON.stringify(cutout));
+  const optimizado = await optimizarCutout(cutout);
+  if (optimizado) await setSetting(clientId, `brand_cutout_${id}`, JSON.stringify(optimizado));
   await setSetting(clientId, "brand_photo_ids", JSON.stringify([...meta.map((p) => p.id), id]));
+  olvidarFotos(clientId);
   return id;
 }
 
 export async function setBrandCutout(clientId: number, id: string, cutout: Cutout): Promise<void> {
   const meta = await listPhotoMeta(clientId);
   if (!meta.some((p) => p.id === id)) throw new Error("Foto no encontrada");
-  await setSetting(clientId, `brand_cutout_${id}`, JSON.stringify(cutout));
+  await setSetting(clientId, `brand_cutout_${id}`, JSON.stringify((await optimizarCutout(cutout)) ?? cutout));
+  olvidarFotos(clientId);
 }
 
 export async function deleteBrandPhoto(clientId: number, id: string): Promise<void> {
@@ -165,4 +207,5 @@ export async function deleteBrandPhoto(clientId: number, id: string): Promise<vo
       AND key IN (${`brand_photo_${id}`}, ${`brand_cutout_${id}`})
   `;
   await setSetting(clientId, "brand_photo_ids", JSON.stringify(meta.map((p) => p.id).filter((p) => p !== id)));
+  olvidarFotos(clientId);
 }

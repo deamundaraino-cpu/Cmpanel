@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const OPTIONS = [
-  { value: "", label: "⚖️ Mix de los 3 pilares (2+2+2)" },
+  { value: "", label: "⚖️ Mix de los 3 pilares" },
+  { value: "huecos", label: "🧭 Llenar huecos (lo menos trabajado)" },
   { value: "crecimiento", label: "📈 Solo Crecimiento" },
   { value: "adoctrinamiento", label: "🧲 Solo Adoctrinamiento" },
   { value: "conversion", label: "🎯 Solo Conversión" },
-  { value: "comentarios", label: "💬 Desde comentarios reales" },
+  { value: "comentarios", label: "🗣️ Desde la voz de la audiencia" },
+  { value: "referentes", label: "👁 Desde tus referentes" },
 ];
 
 export default function ResearchControl() {
@@ -23,7 +25,7 @@ export default function ResearchControl() {
     setMsg(null);
     try {
       const body =
-        pilar === "comentarios" ? { source: "comentarios" } : pilar ? { pilar } : {};
+        pilar === "comentarios" || pilar === "huecos" || pilar === "referentes" ? { source: pilar } : pilar ? { pilar } : {};
       const res = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,8 +38,8 @@ export default function ResearchControl() {
       } else {
         setError(false);
         setMsg(
-          `${json.count} ideas nuevas${
-            json.fromComments ? " (de comentarios reales)" : json.webSearch ? " (con búsqueda web)" : ""
+          `${json.count} ideas nuevas${json.webSearch ? " (con búsqueda web)" : ""}${
+            json.repetidas ? ` · ${json.repetidas} descartadas por repetidas` : ""
           }`
         );
         router.refresh();

@@ -10,6 +10,7 @@ export type HookRow = {
   source_post_id: string | null;
   source_proposal_id: number | null;
   er: number | null;
+  origen: string | null;
 };
 
 /**

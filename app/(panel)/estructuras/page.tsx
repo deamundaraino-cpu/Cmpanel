@@ -10,12 +10,12 @@ export default async function StructuresPage() {
   const [cliente] = await sql<{ nombre: string }[]>`SELECT nombre FROM clients WHERE id = ${clientId}`;
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight">Estructuras de guion</h1>
-      <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-        Tus plantillas de guion: convierten cualquier idea en un video de alta
-        retención. Cada una puede valer para todas tus marcas o solo para una,
-        porque no todas guionizan igual. Aquí ves las generales y las de{" "}
+    <div className="mx-auto max-w-6xl">
+      <h1 className="text-2xl font-semibold tracking-tight">Estructuras y formatos</h1>
+      <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-zinc-400">
+        Galería de estructuras de guion por pilar de contenido —crecimiento para llegar a gente nueva,
+        adoctrinamiento para ganar su confianza, conversión para pedir una acción— y de formatos de grabación.
+        Cada ficha dice qué señal de Instagram empuja, cuándo usarla y cuándo no. Aquí ves las generales y las de{" "}
         <strong className="text-zinc-300">{cliente?.nombre || "la marca activa"}</strong>.
       </p>
 

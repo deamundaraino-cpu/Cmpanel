@@ -8,6 +8,7 @@ type Hook = {
   formato: string | null;
   source_post_id: string | null;
   er: number | null;
+  origen: string | null;
 };
 
 const pct = (v: number) => (v * 100).toFixed(2).replace(".", ",") + "%";
@@ -49,7 +50,7 @@ export default function HooksManager() {
         Todavía no hay ganchos archivados. Se guardan solos cuando un post que
         salió de una propuesta aprobada resulta <strong>ganador</strong> — es
         decir, cuando su engagement supera 1,5× tu mediana con alcance por
-        encima de la mediana.
+        encima de la mediana. También puedes guardarlos desde Referentes.
       </div>
     );
   }
@@ -80,9 +81,15 @@ export default function HooksManager() {
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-            <span className="rounded-md bg-emerald-600/15 px-2 py-0.5 text-emerald-300">
-              ⭐ Ganador
-            </span>
+            {h.origen ? (
+              <span className="rounded-md bg-sky-600/15 px-2 py-0.5 text-sky-300">
+                👁 Referente @{h.origen.replace(/^@/, "")}
+              </span>
+            ) : (
+              <span className="rounded-md bg-emerald-600/15 px-2 py-0.5 text-emerald-300">
+                ⭐ Ganador
+              </span>
+            )}
             {h.er != null && (
               <span className="tabular-nums">{pct(h.er)} ER</span>
             )}

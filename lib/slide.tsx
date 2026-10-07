@@ -93,7 +93,11 @@ const H = 1350;
  * Las portadas son privadas de cada cliente y cambian al tocar el esquema o las
  * fotos: no deben quedarse cacheadas (@vercel/og las marca inmutables por un año).
  */
-export const PRIVATE_IMAGE_HEADERS = { "Cache-Control": "private, no-store, max-age=0, must-revalidate" };
+// "private" = solo la cachea el navegador de cada usuario, nunca un CDN
+// compartido (que era el riesgo real que se quería evitar). Se permite
+// almacenar y se obliga a revalidar: con el ETag, una imagen que no ha cambiado
+// se resuelve con un 304 sin cuerpo y sin leer las fotos.
+export const PRIVATE_IMAGE_HEADERS = { "Cache-Control": "private, max-age=0, must-revalidate" };
 
 export function hashString(text: string): number {
   let h = 0;
@@ -1399,8 +1403,8 @@ function renderFotoPersonal(slide: Slide, index: number, total: number, style: B
   return coverTipografico(args);
 }
 
-export function renderSlide(opts: { slide: Slide; index: number; total: number; style: BrandStyle }) {
-  const { slide, index, total, style } = opts;
+export function renderSlide(opts: { slide: Slide; index: number; total: number; style: BrandStyle; etag?: string }) {
+  const { slide, index, total, style, etag } = opts;
   const tree =
     style.visualStyle === "foto_personal"
       ? renderFotoPersonal(slide, index, total, style)
@@ -1410,5 +1414,10 @@ export function renderSlide(opts: { slide: Slide; index: number; total: number; 
           ? renderBoldContraste(slide, index, total, style)
           : renderBoldImpacto(slide, index, total, style);
 
-  return new ImageResponse(tree, { width: W, height: H, fonts: fonts(designOf(style)), headers: PRIVATE_IMAGE_HEADERS });
+  return new ImageResponse(tree, {
+    width: W,
+    height: H,
+    fonts: fonts(designOf(style)),
+    headers: { ...PRIVATE_IMAGE_HEADERS, ...(etag ? { ETag: etag } : {}) },
+  });
 }

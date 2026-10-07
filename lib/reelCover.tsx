@@ -606,14 +606,14 @@ const RENDERERS: Record<ReelTemplate, (a: Args) => React.ReactElement> = {
   declaracion,
 };
 
-export function renderReelCover(opts: { template: ReelTemplate; text: string; style: BrandStyle; photo: BrandPhoto | null }) {
+export function renderReelCover(opts: { template: ReelTemplate; text: string; style: BrandStyle; photo: BrandPhoto | null; etag?: string }) {
   const theme = resolveTheme(opts.style);
   const render = RENDERERS[opts.template] || centro;
   return new ImageResponse(render({ text: opts.text, style: opts.style, theme, photo: opts.photo }), {
     width: W,
     height: H,
     fonts: fonts(designOf(opts.style)),
-    headers: PRIVATE_IMAGE_HEADERS,
+    headers: { ...PRIVATE_IMAGE_HEADERS, ...(opts.etag ? { ETag: opts.etag } : {}) },
   });
 }
 

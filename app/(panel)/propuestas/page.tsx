@@ -54,6 +54,8 @@ export default async function ProposalsPage() {
               quality={p.quality}
               qualityNotes={p.quality_notes}
               clientFeedback={p.client_feedback}
+              hookFamily={p.hook_family}
+              origen={p.origen}
             />
           );
         })}

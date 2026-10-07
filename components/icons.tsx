@@ -15,7 +15,9 @@ type IconName =
   | "users"
   | "logout"
   | "sun"
-  | "moon";
+  | "moon"
+  | "video"
+  | "eye";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: (
@@ -142,6 +144,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   moon: <path d="M20 13.5A8 8 0 0 1 10.5 4 8 8 0 1 0 20 13.5Z" />,
+  video: (
+    <>
+      <rect x="2.5" y="6" width="13" height="12" rx="2" />
+      <path d="m15.5 10.5 6-3.5v10l-6-3.5" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
 };
 
 export default function Icon({

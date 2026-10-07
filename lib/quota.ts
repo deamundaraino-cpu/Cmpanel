@@ -14,7 +14,7 @@ export type QuotaResult =
 
 /**
  * Consume 1 operación de IA del cupo diario del usuario (atómico).
- * kinds: analyze | research | proposal | regenerate | report
+ * kinds: analyze | research | proposal | regenerate | report | referente
  */
 export async function consumeQuota(userId: string, kind: string): Promise<QuotaResult> {
   const sql = getSql();

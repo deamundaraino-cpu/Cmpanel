@@ -1,10 +1,14 @@
 import { getSql, PostRow, StoryRow } from "./db";
 import { getSettings } from "./settings";
+import { stripEmphasis } from "./emphasis";
 
 export type Alert = {
   level: "critical" | "warning" | "info";
   title: string;
   detail: string;
+  /** Acción sugerida (enlace dentro del panel). */
+  href?: string;
+  cta?: string;
 };
 
 /** Alertas operativas calculadas sobre datos reales (sin IA, sin coste). */
@@ -123,6 +127,56 @@ export async function computeAlerts(clientId: number): Promise<Alert[]> {
       level: "warning",
       title: `${n} pieza${n > 1 ? "s" : ""} del calendario atrasada${n > 1 ? "s" : ""}`,
       detail: "Tienen fecha pasada y no están marcadas como publicadas. Actualízalas o reprográmalas.",
+    });
+  }
+
+  // 7. Entregas de edición vencidas.
+  const [lateEdit] = await sql<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM calendar_items
+    WHERE client_id = ${clientId} AND fecha_entrega IS NOT NULL AND fecha_entrega < ${today}
+      AND estado NOT IN ('listo', 'publicado')
+  `;
+  if (lateEdit.n > 0) {
+    const n = lateEdit.n;
+    alerts.push({
+      level: "warning",
+      title: `${n} entrega${n > 1 ? "s" : ""} de edición vencida${n > 1 ? "s" : ""}`,
+      detail: "Pasó la fecha de entrega y la pieza aún no está lista. Revísala con tu editor en el Pipeline.",
+    });
+  }
+
+  // 8. Guiones acumulados sin día de grabación.
+  const [toRecord] = await sql<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM calendar_items
+    WHERE client_id = ${clientId} AND estado = 'por_grabar' AND session_id IS NULL
+      AND parent_item_id IS NULL
+  `;
+  if (toRecord.n >= 3) {
+    alerts.push({
+      level: "info",
+      title: `${toRecord.n} guiones esperando grabación`,
+      detail: "Agrúpalos en una sesión en Grabación y grábalos todos el mismo día.",
+    });
+  }
+
+  // 9. Pruebas de formato que ganaron: hay que exprimirlas.
+  const tests = await sql<{ titulo: string; perf_ratio: number }[]>`
+    SELECT ci.titulo, p.perf_ratio FROM calendar_items ci
+    JOIN posts p ON p.client_id = ci.client_id AND p.id = ci.post_id
+    WHERE ci.client_id = ${clientId} AND ci.es_prueba AND p.perf_ratio >= 1.5
+      AND NOT EXISTS (
+        SELECT 1 FROM proposals pr
+        WHERE pr.client_id = ci.client_id AND pr.post_id = p.id AND pr.origen = 'exprimir'
+      )
+    ORDER BY p.perf_ratio DESC LIMIT 3
+  `;
+  for (const t of tests) {
+    alerts.push({
+      level: "info",
+      title: `🧪 Tu prueba «${stripEmphasis(t.titulo).slice(0, 60)}» rindió ×${t.perf_ratio.toFixed(1)}`,
+      detail: "Superó la media de la cuenta: exprímela en reel corto, carrusel y vídeo largo.",
+      href: "/posts",
+      cta: "Exprimir en Publicaciones",
     });
   }
 

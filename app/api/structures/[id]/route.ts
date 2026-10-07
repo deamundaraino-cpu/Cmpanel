@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard, fail } from "@/lib/api";
 import { getSql, StructureRow, StructureBeat } from "@/lib/db";
+import { toPilar } from "@/lib/pilares";
 
 /** Secciones válidas: con nombre y al menos dos. */
 function cleanBeats(beats: unknown): StructureBeat[] | null {
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   try {
-    const { nombre, descripcion, beats, soloEstaMarca } = await req.json();
+    const { nombre, descripcion, beats, soloEstaMarca, pilar } = await req.json();
     if (typeof nombre !== "string" || !nombre.trim()) {
       return fail(new Error("Falta el nombre de la estructura"), 400);
     }
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const [updated] = await sql<{ id: number }[]>`
       UPDATE structures
       SET nombre = ${nombre.trim()}, descripcion = ${descripcion || ""},
-          beats = ${JSON.stringify(clean)}, client_id = ${clientScope}
+          beats = ${JSON.stringify(clean)}, client_id = ${clientScope}, pilar = ${toPilar(pilar)}
       WHERE id = ${Number(id)} AND user_id = ${auth.userId}
       RETURNING id
     `;

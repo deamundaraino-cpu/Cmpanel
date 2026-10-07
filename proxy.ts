@@ -65,7 +65,15 @@ export async function proxy(request: NextRequest) {
   // Todo lo que sirve el panel depende del cliente activo: ni el navegador ni
   // el CDN deben reutilizarlo entre cargas o entre marcas. Se excluyen las
   // fotos de marca, que pesan megas y ya fijan su propia caché privada corta.
-  if (!path.startsWith("/api/brand-photos")) {
+  // Las rutas de imagen gestionan su propia caché (privada, con ETag): si el
+  // proxy las forzara a no-store, el navegador no podría revalidar y volvería a
+  // descargar y regenerar cada portada en cada visita.
+  const sirveImagen =
+    path.startsWith("/api/brand-photos") ||
+    path.startsWith("/api/slide") ||
+    path.startsWith("/api/brand-preview") ||
+    /^\/api\/proposals\/[^/]+\/portada/.test(path);
+  if (!sirveImagen) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
   }
   return response;

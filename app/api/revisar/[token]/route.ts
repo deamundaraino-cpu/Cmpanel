@@ -36,7 +36,7 @@ export async function POST(
         WHERE share_token = ${token}
         RETURNING *
       `;
-      // La aprobación del cliente mete la pieza al Pipeline (fase «idea»).
+      // La aprobación del cliente mete la pieza al Pipeline (lib/pipeline.ts).
       if (updated[0]) await ensurePipelineItem(updated[0]);
       return NextResponse.json({ ok: true, status: "aprobada" });
     }

@@ -53,8 +53,12 @@ export function parseScript(texto: string, previous: Beat[]): Beat[] {
   });
 }
 
-/** Texto editable a partir de la pieza guardada (para precargar el editor). */
-export function pieceToText(formato: string, items: (Slide & Beat)[]): string {
+/**
+ * Texto editable a partir de la pieza guardada (para precargar el editor, y
+ * como referencia de contenido al pedir cambios). Acepta slides o secciones:
+ * lee solo los campos del formato que se le indica.
+ */
+export function pieceToText(formato: string, items: (Partial<Slide> & Partial<Beat>)[]): string {
   if (formato === "guion_video") {
     return items.map((b) => `${b.seccion}:\n${b.texto}`).join("\n\n");
   }

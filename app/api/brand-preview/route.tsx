@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardClient } from "@/lib/api";
 import { COVER_LAYOUTS, CoverLayout, renderSlide, VisualStyle } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
+import { brandFingerprint, etagFor, matchesEtag, notModified } from "@/lib/renderVersion";
 
 const DEMO_SLIDE = {
   titulo: "Así se ve **tu carrusel**",
@@ -30,6 +31,12 @@ export async function GET(req: NextRequest) {
     ? { titulo: DEMO_TITLES[layout], cuerpo: "", layout }
     : DEMO_SLIDE;
 
+  // Las 10 composiciones de esta página se repintaban en cada visita y cada una
+  // releía las fotos. Con ETag, si nada de la marca cambió, son 10 respuestas
+  // vacías de 304.
+  const etag = etagFor("preview", override, layout, await brandFingerprint(auth.clientId));
+  if (matchesEtag(req.headers.get("if-none-match"), etag)) return notModified(etag);
+
   const style = await buildBrandStyle(auth.clientId, {
     coverSeed: slide.titulo,
     needAvatar: false,
@@ -37,5 +44,5 @@ export async function GET(req: NextRequest) {
   });
   if (override) style.visualStyle = override as VisualStyle;
 
-  return renderSlide({ slide, index: 0, total: 7, style });
+  return renderSlide({ slide, index: 0, total: 7, style, etag });
 }

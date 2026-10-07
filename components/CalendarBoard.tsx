@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PILARES, PILAR_META, toPilar } from "@/lib/pilares";
+import { LABEL, normalizeState, stepState } from "@/lib/pipelineStates";
 
 type Item = {
   id: number;
@@ -17,21 +18,18 @@ type Item = {
 
 type Campaign = { id: number; nombre: string; color: string };
 
-const ESTADOS = ["idea", "en_diseno", "listo", "publicado"] as const;
-
-const ESTADO_LABEL: Record<string, string> = {
-  idea: "💡 Idea",
-  en_diseno: "🎨 En diseño",
-  listo: "✅ Listo",
-  publicado: "🚀 Publicado",
-};
-
 const ESTADO_STYLE: Record<string, string> = {
   idea: "border-zinc-700 bg-zinc-800/70 text-zinc-300",
-  en_diseno: "border-amber-700/50 bg-amber-900/30 text-amber-200",
+  por_grabar: "border-sky-700/50 bg-sky-900/30 text-sky-200",
+  grabado: "border-sky-700/50 bg-sky-900/30 text-sky-200",
+  en_edicion: "border-amber-700/50 bg-amber-900/30 text-amber-200",
+  revision: "border-amber-700/50 bg-amber-900/30 text-amber-200",
   listo: "border-emerald-700/50 bg-emerald-900/30 text-emerald-200",
   publicado: "border-indigo-700/50 bg-indigo-900/30 text-indigo-200",
 };
+
+const estadoLabel = (estado: string) => LABEL[normalizeState(estado) ?? "idea"];
+const estadoStyle = (estado: string) => ESTADO_STYLE[normalizeState(estado) ?? "idea"];
 
 export default function CalendarBoard({
   month, // YYYY-MM
@@ -49,6 +47,11 @@ export default function CalendarBoard({
   const [campaignId, setCampaignId] = useState<string>("");
   const [pilar, setPilar] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  // Drag & drop: la pieza que se arrastra, el día sobre el que está y los
+  // movimientos optimistas (id → nueva fecha) mientras el servidor confirma.
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [overDay, setOverDay] = useState<string | null>(null);
+  const [moved, setMoved] = useState<Record<number, string>>({});
 
   const [year, mon] = month.split("-").map(Number);
   const first = new Date(year, mon - 1, 1);
@@ -57,7 +60,8 @@ export default function CalendarBoard({
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const byDay = new Map<string, Item[]>();
-  for (const it of items) {
+  for (const raw of items) {
+    const it = moved[raw.id] ? { ...raw, fecha: moved[raw.id] } : raw;
     const key = it.fecha.slice(0, 10);
     byDay.set(key, [...(byDay.get(key) || []), it]);
   }
@@ -86,13 +90,37 @@ export default function CalendarBoard({
   }
 
   async function cycleEstado(item: Item) {
-    const idx = ESTADOS.indexOf(item.estado as (typeof ESTADOS)[number]);
-    const next = ESTADOS[(idx + 1) % ESTADOS.length];
+    // Sigue el flujo del formato; tras «publicado» vuelve a empezar.
+    const next = stepState(item.formato, item.estado, 1) ?? "idea";
     await fetch(`/api/calendar/${item.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ estado: next }),
     });
+    router.refresh();
+  }
+
+  async function moveItem(id: number, day: string) {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const current = (moved[id] || item.fecha).slice(0, 10);
+    if (current === day) return;
+    // Conserva la hora si la fecha la incluye; solo cambia el día.
+    const fecha = day + item.fecha.slice(10);
+    setMoved((m) => ({ ...m, [id]: fecha }));
+    const res = await fetch(`/api/calendar/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fecha }),
+    });
+    if (!res.ok) {
+      setMoved((m) => {
+        const { [id]: _, ...rest } = m;
+        return rest;
+      });
+      alert("No se pudo mover la pieza. Inténtalo de nuevo.");
+      return;
+    }
     router.refresh();
   }
 
@@ -123,7 +151,28 @@ export default function CalendarBoard({
         {cells.map((fecha, i) => (
           <div
             key={i}
-            className={`min-h-[110px] bg-zinc-950 p-1.5 ${fecha === todayStr ? "bg-indigo-950/30" : ""}`}
+            onDragOver={(e) => {
+              if (!fecha || draggingId === null) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (overDay !== fecha) setOverDay(fecha);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setOverDay((d) => (d === fecha ? null : d));
+              }
+            }}
+            onDrop={(e) => {
+              if (!fecha) return;
+              e.preventDefault();
+              const id = Number(e.dataTransfer.getData("text/plain"));
+              setOverDay(null);
+              setDraggingId(null);
+              if (id) moveItem(id, fecha);
+            }}
+            className={`min-h-[110px] bg-zinc-950 p-1.5 transition-colors ${
+              fecha === todayStr ? "bg-indigo-950/30" : ""
+            } ${overDay === fecha ? "!bg-indigo-900/40 ring-1 ring-inset ring-indigo-500" : ""}`}
           >
             {fecha && (
               <>
@@ -153,12 +202,24 @@ export default function CalendarBoard({
                     return (
                       <div
                         key={it.id}
-                        className={`group rounded border px-1.5 py-1 text-[10px] leading-tight ${ESTADO_STYLE[it.estado] || ESTADO_STYLE.idea}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", String(it.id));
+                          e.dataTransfer.effectAllowed = "move";
+                          setDraggingId(it.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null);
+                          setOverDay(null);
+                        }}
+                        className={`group cursor-grab rounded border px-1.5 py-1 text-[10px] leading-tight active:cursor-grabbing ${
+                          estadoStyle(it.estado)
+                        } ${draggingId === it.id ? "opacity-40" : ""}`}
                       >
                         <button
                           onClick={() => cycleEstado(it)}
                           className="block w-full text-left"
-                          title={`${ESTADO_LABEL[it.estado]} — clic para avanzar estado`}
+                          title={`${estadoLabel(it.estado)} — clic para avanzar estado`}
                         >
                           {camp && (
                             <span
@@ -174,7 +235,7 @@ export default function CalendarBoard({
                           )}
                           {it.titulo}
                           <span className="mt-0.5 block text-[9px] opacity-70">
-                            {ESTADO_LABEL[it.estado]} · {it.formato}
+                            {estadoLabel(it.estado)} · {it.formato}
                           </span>
                         </button>
                         <button
@@ -248,7 +309,8 @@ export default function CalendarBoard({
         ))}
       </div>
       <p className="mt-3 text-xs text-zinc-600">
-        Clic en una pieza para avanzar su estado: 💡 Idea → 🎨 En diseño → ✅ Listo → 🚀 Publicado.
+        Arrastra una pieza a otro día para reprogramarla. Clic para avanzar su estado: 💡 Idea →
+        🎨 En diseño → ✅ Listo → 🚀 Publicado.
       </p>
     </div>
   );

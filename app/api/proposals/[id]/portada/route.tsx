@@ -8,6 +8,7 @@ import { COVER_TEXTS_INSTRUCTION, sanitizeCoverTexts } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { REEL_TEMPLATES } from "@/lib/brandDesign";
 import { fallbackCoverText, renderReelCover } from "@/lib/reelCover";
+import { brandFingerprint, etagFor, matchesEtag, notModified } from "@/lib/renderVersion";
 
 export const maxDuration = 60;
 
@@ -55,12 +56,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const pool = template.needsCutout && withCutout.length ? withCutout : meta;
   const chosen = meta.find((m) => m.id === requested) || (pool.length ? pool[(templateIndex + k) % pool.length] : null);
 
+  // El selector pinta las 11 plantillas a la vez y cada una cargaba su foto.
+  // Con ETag, repetir la visita son 11 respuestas vacías. Se comprueba antes de
+  // construir el estilo y de cargar la foto, que es lo caro.
+  const etag = etagFor("portada", id, template.value, text, chosen?.id, await brandFingerprint(auth.clientId));
+  if (!sp.get("download") && matchesEtag(req.headers.get("if-none-match"), etag)) return notModified(etag);
+
   const [style, photo] = await Promise.all([
     buildBrandStyle(auth.clientId, { needCover: false, needAvatar: false }),
     chosen ? loadPhoto(auth.clientId, chosen.id) : null,
   ]);
 
-  const image = renderReelCover({ template: template.value, text, style, photo });
+  const image = renderReelCover({ template: template.value, text, style, photo, etag });
   if (sp.get("download")) {
     return new NextResponse(image.body, {
       headers: {

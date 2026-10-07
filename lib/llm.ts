@@ -3,12 +3,18 @@ import { getAppSettings } from "./appSettings";
 
 export class LlmError extends Error {
   transient: boolean;
-  constructor(message: string, transient = false) {
+  /** Respuesta cortada por max_tokens: reintentar igual no sirve, hay que dar más margen. */
+  length: boolean;
+  constructor(message: string, transient = false, length = false) {
     super(message);
     this.name = "LlmError";
     this.transient = transient;
+    this.length = length;
   }
 }
+
+const DEFAULT_MAX_TOKENS = 6000;
+const MAX_TOKENS_CAP = 32000;
 
 export const PROVIDERS: Record<string, { baseUrl: string; model: string; label: string }> = {
   groq: {
@@ -82,24 +88,66 @@ async function getFallbackLlmConfig(): Promise<ProviderCall | null> {
   };
 }
 
-async function callProvider(cfg: ProviderCall, system: string, user: string): Promise<string> {
+/**
+ * Opciones de muestreo por llamada. La temperatura era fija en 0.7 para todo,
+ * así que dos generaciones del mismo tema no tenían de dónde salir distintas, y
+ * una reparación de reglas —que debería ser conservadora— corría igual de suelta
+ * que una escritura desde cero.
+ */
+export type SamplingOptions = {
+  temperature?: number;
+  seed?: number;
+  /** Margen de salida (incluye lo que el modelo gasta "pensando"). */
+  maxTokens?: number;
+};
+
+/**
+ * Escribir y corregir no son la misma tarea: una pide variedad y la otra
+ * fidelidad. Antes ambas corrían a 0.7.
+ */
+export const TEMP = {
+  /**
+   * Pieza nueva. Cada variante sube un escalón para separarlas más, pero poco:
+   * por encima de ~0.9 el modelo empieza a devolver guiones truncados y comillas
+   * mal cerradas en un JSON tan largo. La variedad real la dan las familias de
+   * gancho (lib/angles.ts), no la temperatura.
+   */
+  generacion: 0.8,
+  escalonVariante: 0.1,
+  /** Reparar reglas de marca: se cambia lo mínimo, no se reinventa. */
+  reparacion: 0.3,
+  /** Aplicar un retoque pedido por el editor. */
+  retoque: 0.5,
+  /** Reescribir de raíz cuando el feedback cuestiona el fondo. */
+  reescritura: 0.9,
+} as const;
+
+/** El respaldo de OpenRouter/Groq admite `seed`; Gemini vía capa OpenAI-compat puede rechazarlo. */
+const ADMITE_SEED = new Set(["openrouter", "groq"]);
+
+export function buildRequestBody(cfg: ProviderCall, system: string, user: string, opts: SamplingOptions = {}) {
+  return {
+    model: cfg.model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    temperature: opts.temperature ?? 0.7,
+    ...(opts.seed !== undefined && ADMITE_SEED.has(cfg.provider) ? { seed: opts.seed } : {}),
+    // Los guiones y carruseles son JSON largos; sin margen el modelo corta la
+    // respuesta a medias (o la gasta entera "pensando") y llega vacía.
+    max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
+  };
+}
+
+async function callProvider(cfg: ProviderCall, system: string, user: string, opts: SamplingOptions = {}): Promise<string> {
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${cfg.apiKey}`,
     },
-    body: JSON.stringify({
-      model: cfg.model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.7,
-      // Los guiones y carruseles son JSON largos; sin margen el modelo corta la
-      // respuesta a medias (o la gasta entera "pensando") y llega vacía.
-      max_tokens: 6000,
-    }),
+    body: JSON.stringify(buildRequestBody(cfg, system, user, opts)),
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
@@ -114,12 +162,12 @@ async function callProvider(cfg: ProviderCall, system: string, user: string): Pr
   if (!content) {
     const why = choice?.finish_reason === "length" ? " (se quedó sin espacio)" : choice?.finish_reason ? ` (${choice.finish_reason})` : "";
     // Transitorio: con otro intento, o con el proveedor de respaldo, suele salir.
-    throw new LlmError(`El proveedor de IA no devolvió contenido${why}.`, true);
+    throw new LlmError(`El proveedor de IA no devolvió contenido${why}.`, true, choice?.finish_reason === "length");
   }
   return content;
 }
 
-export async function chat(system: string, user: string): Promise<string> {
+export async function chat(system: string, user: string, opts: SamplingOptions = {}): Promise<string> {
   const primary = await getLlmConfig();
   // Ante fallos transitorios (saturación, rate limit o respuesta vacía) se
   // reintenta y, si sigue, se pasa al respaldo. Los errores de configuración o
@@ -130,12 +178,18 @@ export async function chat(system: string, user: string): Promise<string> {
 
   let last: unknown = new LlmError("La IA no respondió.");
   for (const { cfg, tries } of attempts) {
+    let callOpts = opts;
     for (let i = 0; i < tries; i++) {
       try {
-        return await callProvider(cfg, system, user);
+        return await callProvider(cfg, system, user, callOpts);
       } catch (e) {
         if (!(e instanceof LlmError) || !e.transient) throw e;
         last = e;
+        // Cortada por espacio: el mismo intento volvería a cortarse. Doble margen.
+        if (e.length) {
+          const actual = callOpts.maxTokens ?? DEFAULT_MAX_TOKENS;
+          callOpts = { ...callOpts, maxTokens: Math.min(actual * 2, MAX_TOKENS_CAP) };
+        }
       }
     }
   }
@@ -143,10 +197,11 @@ export async function chat(system: string, user: string): Promise<string> {
 }
 
 /** Pide una respuesta JSON y la parsea con tolerancia a texto extra. */
-export async function chatJson<T>(system: string, user: string): Promise<T> {
+export async function chatJson<T>(system: string, user: string, opts: SamplingOptions = {}): Promise<T> {
   const raw = await chat(
     system + "\nResponde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.",
-    user
+    user,
+    opts
   );
   const cleaned = raw.replace(/```json|```/g, "").trim();
   const start = cleaned.search(/[{[]/);

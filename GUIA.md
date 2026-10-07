@@ -56,6 +56,31 @@ edición) y carruseles que el cliente final aprueba con un enlace, sin cuenta.
 8. **Calendario / Pipeline / Campañas**: planifica y sigue la producción de
    cada cliente; **Métricas** e informes ejecutivos para reportarle.
 
+## Sistema de contenido semanal
+
+1. **Referentes** (Analiza): añade 3-5 cuentas de referencia y pega sus
+   mejores piezas (transcripción o caption + vistas). Con 3 o más piezas con
+   vistas se marca cuánto superó cada una la media de su cuenta (×N).
+   «Analizar con IA» extrae gancho, estructura y patrón; se pueden guardar
+   como gancho o como estructura. En **Ideas** → «👁 Desde tus referentes»
+   la IA adapta esos patrones a la marca (nunca copia el tema).
+2. **Guion**: igual que antes. Al aprobarse, el guion entra al Pipeline en
+   «Por grabar» y el carrusel en «En edición».
+3. **Grabación** (Planifica): agrupa los guiones en una sesión (un día a la
+   semana) y grábalos con el **teleprompter** (espacio pausa, ↑↓ velocidad,
+   ←→ pieza, modo espejo). Marcar «grabado» mueve la pieza y su gemela.
+4. **Pipeline**: fases idea → por grabar → grabado → en edición → revisión →
+   listo → publicado (los carruseles se saltan la grabación). En cada pieza:
+   versión corta/larga, fecha de entrega de edición, indicaciones para el
+   editor, enlace de la entrega y **«Copiar brief para el editor»** (para
+   mandarlo por WhatsApp/email). «Duplicar en versión larga/corta» crea la
+   pieza gemela: dos formatos por cada grabación.
+5. **Testeo y exprimir**: marca una pieza como 🧪 prueba y enlázala a su post
+   publicado. Cada post muestra su ×N frente a la mediana de la cuenta; si
+   una prueba supera ×1,5 salta una alerta en Métricas. **🍋 Exprimir** (en
+   Publicaciones y Dashboard, solo ganadores) genera de una vez reel corto +
+   carrusel + vídeo largo (3 operaciones de IA).
+
 ## Cómo se califica cada post
 
 Engagement ponderado = (likes + comentarios + 2×guardados + 3×compartidos) / alcance.
@@ -90,3 +115,30 @@ DATABASE_URL="postgres://…pooler…:6543/postgres" node scripts/migrate-client
 Crea 1 cliente por usuario existente, reasigna todo su contenido y elimina la
 columna `user_id` de las tablas de contenido. Idempotente. Instalaciones
 nuevas: ejecutar `scripts/schema.sql` directamente.
+
+## Galería de estructuras y formatos
+
+**Estructuras** (`/estructuras`) tiene dos pestañas con filtro por pilar:
+
+- **Estructuras de guion** (18 base: 7 de crecimiento, 7 de adoctrinamiento y 4 de
+  conversión). Cada ficha incluye la señal de Instagram que empuja, la duración,
+  cuándo usarla y **cuándo no**, por qué funciona, cómo grabarla, los ganchos que
+  le encajan, referentes y fuentes. Fuente de verdad: `lib/baseStructures.ts`.
+- **Formatos de grabación** (24): cómo se filma la pieza (pizarra, nota del
+  móvil, pantalla verde, videollamada…). Salen de los formatos validados de VK
+  Metrics, filtrados. Al crear un guion se elige estructura (agrupada por pilar)
+  y formato de grabación, y las notas de edición se adaptan al formato.
+  Fuente: `lib/executionFormats.ts`.
+
+## Migración del sistema de contenido (una sola vez, producción)
+
+Añade las fases de producción, sesiones de grabación, referentes, `perf_ratio`
+y la galería de estructuras (columnas `pilar`/`ficha` y las 18 estructuras base). Aditiva e idempotente; ejecutar ANTES de
+desplegar el código que la usa:
+
+```bash
+DATABASE_URL="postgres://…pooler…:6543/postgres" npx tsx scripts/migrate-production-system.mjs
+```
+
+Después, pulsa «Analizar con IA» o sincroniza para que se calcule el ×N
+(`perf_ratio`) de los posts existentes.

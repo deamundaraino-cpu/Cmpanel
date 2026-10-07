@@ -48,10 +48,12 @@ export default async function PanelLayout({
             <NavLink href="/metricas" icon="chart">Métricas</NavLink>
             <NavLink href="/posts" icon="grid">Publicaciones</NavLink>
             <NavLink href="/comentarios" icon="chat">Comentarios</NavLink>
+            <NavLink href="/referentes" icon="eye">Referentes</NavLink>
           </NavGroup>
           <NavGroup label="Planifica">
             <NavLink href="/calendario" icon="calendar">Calendario</NavLink>
             <NavLink href="/pipeline" icon="kanban">Pipeline</NavLink>
+            <NavLink href="/grabacion" icon="video">Grabación</NavLink>
             <NavLink href="/campanas" icon="megaphone">Campañas</NavLink>
           </NavGroup>
           <NavGroup label="Crea">

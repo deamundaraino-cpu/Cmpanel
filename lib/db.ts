@@ -73,6 +73,7 @@ export type PostRow = {
   er: number;
   score: number | null;
   is_winner: number;
+  perf_ratio: number | null;
   is_demo: number;
   last_synced: string | null;
   campaign_id: number | null;
@@ -96,6 +97,8 @@ export type ProposalRow = {
   pilar: string | null;
   idea_id: number | null;
   is_exemplar: boolean;
+  hook_family: string | null;
+  origen: string | null;
 };
 
 export type StructureBeat = { nombre: string; guia: string };
@@ -109,6 +112,8 @@ export type StructureRow = {
   beats: string;
   is_builtin: number;
   client_id: number | null; // null = para todas las marcas del editor
+  pilar: string | null;
+  ficha: string | null; // JSON StructureFicha (galería); solo en las base
 };
 
 export type CampaignRow = {
@@ -135,6 +140,46 @@ export type CalendarItemRow = {
   proposal_id: number | null;
   notas: string | null;
   pilar: string | null;
+  version: string | null;
+  parent_item_id: number | null;
+  fecha_entrega: string | null;
+  brief_edicion: string | null;
+  entrega_url: string | null;
+  session_id: number | null;
+  es_prueba: boolean;
+  post_id: string | null;
+};
+
+export type RecordingSessionRow = {
+  id: number;
+  client_id: number;
+  created_at: string;
+  fecha: string;
+  notas: string | null;
+  estado: string;
+};
+
+export type ReferenteRow = {
+  id: number;
+  client_id: number;
+  created_at: string;
+  handle: string;
+  nombre: string | null;
+  notas: string | null;
+};
+
+export type ReferentePiezaRow = {
+  id: number;
+  client_id: number;
+  referente_id: number;
+  created_at: string;
+  url: string | null;
+  formato: string | null;
+  texto: string;
+  vistas: number | null;
+  likes: number | null;
+  comentarios: number | null;
+  analisis: string | null;
 };
 
 export type ReportRow = {

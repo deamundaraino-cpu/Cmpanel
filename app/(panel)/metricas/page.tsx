@@ -142,6 +142,11 @@ export default async function MetricsPage({
                   {a.title}
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">{a.detail}</p>
+                {a.href && (
+                  <Link href={a.href} className="mt-1 inline-block text-xs text-indigo-400 hover:text-indigo-300">
+                    {a.cta || "Ir"} →
+                  </Link>
+                )}
               </div>
             ))}
           </div>

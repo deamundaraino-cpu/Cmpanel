@@ -3,6 +3,7 @@ import { guardClient } from "@/lib/api";
 import { getSql, ProposalRow } from "@/lib/db";
 import { renderSlide, Slide } from "@/lib/slide";
 import { buildBrandStyle } from "@/lib/brand";
+import { brandFingerprint, etagFor, matchesEtag, notModified } from "@/lib/renderVersion";
 
 export async function GET(req: NextRequest) {
   const pid = Number(req.nextUrl.searchParams.get("pid"));
@@ -34,10 +35,17 @@ export async function GET(req: NextRequest) {
   if (!slides[index]) {
     return NextResponse.json({ error: "Slide fuera de rango" }, { status: 404 });
   }
+  // Identidad de esta imagen: el contenido de la pieza más el estado de la
+  // marca. Si el navegador ya la tiene, se responde 304 ANTES de construir el
+  // estilo, que es lo que lee las fotos de Postgres.
+  const etag = etagFor(proposal.id, index, proposal.slides, await brandFingerprint(proposal.client_id));
+  if (matchesEtag(req.headers.get("if-none-match"), etag)) return notModified(etag);
+
   return renderSlide({
     slide: slides[index],
     index,
     total: slides.length,
+    etag,
     style: await buildBrandStyle(proposal.client_id, {
       coverSeed: slides[0].titulo,
       photoId: slides[0].foto,

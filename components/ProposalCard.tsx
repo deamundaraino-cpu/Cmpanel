@@ -7,6 +7,7 @@ import { pieceToText } from "@/lib/pastedPiece";
 import ReelCoverPicker from "./ReelCoverPicker";
 import CarouselCoverPicker from "./CarouselCoverPicker";
 import type { CoverLayout, ReelTemplate } from "@/lib/brandDesign";
+import { familyById } from "@/lib/angles";
 
 type Slide = { titulo: string; cuerpo: string; layout?: string; foto?: string; portadas?: string[] };
 type Beat = { seccion: string; texto: string; edicion?: string; portadas?: string[] };
@@ -28,6 +29,8 @@ export default function ProposalCard({
   photos,
   isExemplar,
   exemplarCount,
+  hookFamily,
+  origen,
 }: {
   id: number;
   status: string;
@@ -39,6 +42,10 @@ export default function ProposalCard({
   hashtags: string[];
   quality?: number | null;
   qualityNotes?: string | null;
+  /** Familia de gancho con la que se escribió: distingue de un vistazo las dos versiones de un mismo tema. */
+  hookFamily?: string | null;
+  /** 'exprimir' si nació de exprimir un post ganador. */
+  origen?: string | null;
   clientFeedback?: string | null;
   reelTemplates: ReelTemplate[];
   coverLayouts: CoverLayout[];
@@ -216,6 +223,22 @@ export default function ProposalCard({
               title={qualityNotes || "Autoevaluación de calidad de la IA"}
             >
               Score {quality}
+            </span>
+          )}
+          {origen === "exprimir" && (
+            <span
+              className="rounded-md bg-emerald-600/15 px-2 py-0.5 text-xs text-emerald-300"
+              title="Nació de exprimir un post ganador"
+            >
+              🍋 Exprimida
+            </span>
+          )}
+          {familyById(hookFamily)?.nombre && (
+            <span
+              className="rounded-md bg-indigo-600/15 px-2 py-0.5 text-xs text-indigo-300"
+              title={familyById(hookFamily)?.objetivo}
+            >
+              {familyById(hookFamily)?.nombre}
             </span>
           )}
           <span className="text-xs text-zinc-500">

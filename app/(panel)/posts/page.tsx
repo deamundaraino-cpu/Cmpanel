@@ -1,6 +1,7 @@
 import { getSql, PostRow, CampaignRow } from "@/lib/db";
 import { requireClient } from "@/lib/auth";
 import CreateProposalControl from "@/components/CreateProposalControl";
+import ExprimirButton from "@/components/ExprimirButton";
 import CampaignSelect from "@/components/CampaignSelect";
 
 export const dynamic = "force-dynamic";
@@ -89,9 +90,20 @@ export default async function PostsPage() {
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">{nf.format(p.comments_count)}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">{nf.format(p.saved)}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">{nf.format(p.shares)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">{pct(p.er)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">
+                  {pct(p.er)}
+                  {p.perf_ratio != null && (
+                    <span
+                      className={`block text-[10px] ${p.perf_ratio >= 1.5 ? "text-emerald-400" : "text-zinc-500"}`}
+                      title="ER frente a la mediana de la cuenta"
+                    >
+                      ×{p.perf_ratio.toFixed(1)}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2.5">
                   <div className="grid gap-1.5">
+                    {(p.is_winner || (p.perf_ratio ?? 0) >= 1.5) && <ExprimirButton postId={p.id} compact />}
                     <CreateProposalControl postId={p.id} label="Recrear" />
                     <CampaignSelect postId={p.id} current={p.campaign_id} campaigns={campaigns} />
                   </div>

@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { guardClient, fail } from "@/lib/api";
 import { getSql, ProposalRow, StructureRow, StructureBeat } from "@/lib/db";
-import { chatJson } from "@/lib/llm";
+import { chatJson, TEMP } from "@/lib/llm";
 import { buildBrandBrief, getBrandBanned, getBrandDesign } from "@/lib/brand";
 import { enforceBrandRules, parseBannedRules, violationsNote } from "@/lib/brandRules";
 import { brandCoverLayouts } from "@/lib/brandDesign";
 import { buildExamplesBlock } from "@/lib/brandExamples";
-import { parseCarousel, parseScript, type Beat as PastedBeat, type Slide as PastedSlide } from "@/lib/pastedPiece";
+import { buildScriptRevisionPrompts, feedbackWantsRewrite, sectionRange, sectionCountViolations } from "@/lib/scriptPrompt";
+import { recentPieces, buildAvoidBlock, repetitionViolations, piecePoles } from "@/lib/diversity";
+import { pickHookFamilies, hookFamilyInstruction } from "@/lib/angles";
+import { parseCarousel, parseScript, pieceToText, type Beat as PastedBeat, type Slide as PastedSlide } from "@/lib/pastedPiece";
 import { findViolations, isBlocking, structuralViolations } from "@/lib/brandRules";
 import {
   CarouselGen,
@@ -19,6 +22,7 @@ import {
   coverLayoutInstruction,
   applyCoverTexts,
   COVER_TEXTS_INSTRUCTION,
+  normalizeBeats,
 } from "@/lib/proposalGen";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { listPhotoMeta } from "@/lib/brandPhotos";
@@ -106,26 +110,49 @@ export async function PATCH(
       const isScript = proposal.formato === "guion_video";
 
       if (isScript) {
-        let beatsGuide = "";
+        let beats: StructureBeat[] | null = null;
         if (proposal.structure_id) {
           const structures = await sql<StructureRow[]>`
             SELECT * FROM structures
             WHERE id = ${proposal.structure_id} AND (user_id = ${userId} OR user_id IS NULL)
               AND (client_id IS NULL OR client_id = ${clientId})
           `;
-          if (structures[0]) {
-            const beats = JSON.parse(structures[0].beats) as StructureBeat[];
-            beatsGuide =
-              "\nRespeta EXACTAMENTE esta estructura y sus nombres de sección en orden:\n" +
-              beats.map((b, i) => `${i + 1}. ${b.nombre}: ${b.guia}`).join("\n");
-          }
+          if (structures[0]) beats = JSON.parse(structures[0].beats) as StructureBeat[];
         }
-        const gen = await chatJson<ScriptGen>(
-          `Eres un guionista experto en video corto. Revisas guiones aplicando el feedback del creador SIN perder lo que ya funciona. Si el feedback pide un cambio de fondo —ángulo, estructura, enfoque— reescribe el bloque completo; no lo retoques. Escribes en español, en el tono de la marca.\n\nFicha de marca:\n${brief}${await buildExamplesBlock(clientId, "guion_video")}`,
-          `Guion actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${beatsGuide}\n\n${EDIT_NOTES_INSTRUCTION}\n\nEn el texto de la PRIMERA sección (el gancho inicial), envuelve entre **dobles asteriscos** la frase corta (2-5 palabras) más potente — se usa para generar la portada/miniatura del video.\n\nDevuelve JSON:\n{"beats": [{"seccion": "...", "texto": "...", "edicion": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portadas": ["...", "..."]}\n${QUALITY_BAR}\n${COVER_TEXTS_INSTRUCTION}`
-        );
+
+        // Lo ya publicado por la marca MÁS los polos de esta misma pieza: pedir
+        // "otro gancho" devolvía el mismo gancho maquillado porque el anterior
+        // nunca entraba en la lista de lo que hay que evitar.
+        const previas = await recentPieces(clientId, "guion_video", proposal.id);
+        const propios = piecePoles(proposal.slides, proposal.formato);
+        const aEvitar = [propios, ...previas];
+        const [familia] = pickHookFamilies([proposal.hook_family, ...previas.map((x) => x.familia ?? null)], 1);
+
+        const actual = pieceToText("guion_video", JSON.parse(proposal.slides) as PastedBeat[]);
+        const prompts = buildScriptRevisionPrompts({
+          brief,
+          ejemplos: await buildExamplesBlock(clientId, "guion_video"),
+          feedback,
+          actual,
+          caption: proposal.caption || "",
+          beats,
+          evitar: buildAvoidBlock(aEvitar),
+          // Solo se rota de familia cuando el feedback pide cambio de fondo:
+          // en un retoque, cambiar el ángulo sería pasarse de la orden.
+          angulo: feedbackWantsRewrite(feedback) ? hookFamilyInstruction(familia) : "",
+        });
+
+        const gen = await chatJson<ScriptGen>(prompts.system, prompts.user, {
+          temperature: prompts.reescribe ? TEMP.reescritura : TEMP.retoque,
+        });
         if (!gen.beats?.length) return fail(new Error("La IA no devolvió el guion revisado"), 500);
-        const checked = await enforceBrandRules(gen, banned, repairSystem);
+        gen.beats = normalizeBeats(gen.beats, beats?.map((b) => b.nombre) || []);
+        if (!gen.beats.length) return fail(new Error("La IA no devolvió el guion revisado"), 500);
+        const rango = beats?.length ? sectionRange(beats) : null;
+        const checked = await enforceBrandRules(gen, banned, repairSystem, [
+          (g) => repetitionViolations(g, aEvitar),
+          ...(rango ? [(g: unknown) => sectionCountViolations(g, rango)] : []),
+        ]);
         const q = clampQuality(checked.gen.calidad);
         const notes = [q.notes, violationsNote(checked.violations)].filter(Boolean).join(" · ") || null;
         await sql`
@@ -136,15 +163,16 @@ export async function PATCH(
             quality = ${q.score},
             quality_notes = ${notes},
             status = ${checked.blocked ? "bloqueada" : "pendiente"},
+            hook_family = ${prompts.reescribe ? familia.id : proposal.hook_family},
             client_feedback = NULL
           WHERE client_id = ${clientId} AND id = ${Number(id)}
         `;
-        return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked });
+        return NextResponse.json({ ok: true, regenerated: true, bloqueada: checked.blocked, reescrito: prompts.reescribe });
       }
 
       const gen = await chatJson<CarouselGen>(
         `Eres un creador de carruseles virales de Instagram. Revisas carruseles aplicando el feedback del creador SIN perder lo que ya funciona. Si el feedback pide un cambio de fondo —ángulo, estructura, enfoque— reescribe el slide completo; no lo retoques. Cada slide: titulo (máx 60 caracteres) y cuerpo (máx 220). Primer slide = portada-gancho; último = CTA. Español, tono de la marca. En el titulo de CADA slide, envuelve entre **dobles asteriscos** la palabra o frase corta (1-3 palabras) más impactante — es la que se resalta visualmente en el diseño del carrusel.\n\nFicha de marca:\n${brief}${await buildExamplesBlock(clientId, "carrusel")}`,
-        `Carrusel actual:\n${proposal.slides}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
+        `Carrusel actual (referencia de CONTENIDO, no de fraseo):\n${pieceToText("carrusel", JSON.parse(proposal.slides) as PastedSlide[])}\n\nCaption actual:\n${proposal.caption || ""}\n\nFEEDBACK (aplícalo):\n"""${feedback.slice(0, 600)}"""${buildAvoidBlock([piecePoles(proposal.slides, proposal.formato), ...(await recentPieces(clientId, "carrusel", proposal.id))])}\n\nDevuelve JSON:\n{"slides": [{"titulo": "...", "cuerpo": "..."}], "caption": "...", "hashtags": ["#..."], "calidad": {"score": 0, "razon": "..."}, "portada_layout": "split"}\nEntre 6 y 7 slides, 15-20 hashtags.\n${QUALITY_BAR}\n${coverLayoutInstruction(coverLayouts)}`
       );
       if (!gen.slides?.length) return fail(new Error("La IA no devolvió el carrusel revisado"), 500);
       const checked = await enforceBrandRules(gen, banned, repairSystem);

@@ -1,4 +1,5 @@
 import { COVER_LAYOUTS, type CoverLayout } from "./brandDesign";
+import { openerKey } from "./diversity";
 
 export type QualityGen = { score: number; razon: string };
 
@@ -37,19 +38,36 @@ export type ScriptGen = {
   portadas?: string[];
 };
 
-/** Textos cortos para la portada del reel (no el guion hablado). */
+/**
+ * Textos cortos para la portada del reel (no el guion hablado).
+ *
+ * Los ángulos se describen por su función. Antes se daban con frases de muestra
+ * ("3 errores que…", "nadie te dice esto…") y las portadas salían clonadas entre
+ * piezas: el modelo devolvía el ejemplo con las palabras cambiadas.
+ */
 export const COVER_TEXTS_INSTRUCTION = `Escribe además "portadas": 6 textos DISTINTOS para la portada/miniatura del reel. Reglas:
 - 3 a 7 palabras cada uno, que se lean en 1 segundo en el grid de Instagram. Nada de frases largas.
-- Cada uno con un ángulo diferente: número/lista ("3 errores que…"), pregunta que duele, contraste o mito ("X no es el problema"), resultado concreto, curiosidad ("nadie te dice esto…"), orden directa ("deja de…").
+- Un ángulo distinto en cada uno: uno apoyado en una cifra concreta del tema, uno que formule la pregunta que el espectador ya se está haciendo, uno que contradiga lo que se da por cierto, uno que nombre lo que está en juego, uno que señale la consecuencia de no hacer nada y uno que dé una instrucción directa.
+- Ninguno puede empezar con las mismas palabras que otro ni que el gancho hablado, y ninguno puede ser una frase hecha de reel.
 - En cada texto envuelve entre **dobles asteriscos** la palabra o frase corta (1-2 palabras) que se debe destacar visualmente.
 - Mismo tono de la marca; sin emojis ni hashtags.`;
 
 export function sanitizeCoverTexts(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
+  const vistas = new Set<string>();
   return raw
     .filter((t): t is string => typeof t === "string")
     .map((t) => t.replace(/\s+/g, " ").trim())
     .filter((t) => t && t.length <= 80 && (t.match(/\*\*/g) || []).length % 2 === 0)
+    // Seis portadas que empiezan igual son una portada: se pide variedad y se
+    // comprueba, porque pedirla no basta.
+    .filter((t) => {
+      const clave = openerKey(t);
+      if (!clave) return true;
+      if (vistas.has(clave)) return false;
+      vistas.add(clave);
+      return true;
+    })
     .slice(0, 8);
 }
 
@@ -71,4 +89,28 @@ export function clampQuality(q?: QualityGen): { score: number | null; notes: str
     score: Math.max(0, Math.min(100, Math.round(q.score))),
     notes: (q.razon || "").slice(0, 300) || null,
   };
+}
+
+// Los nombres de sección los elige ahora el modelo (antes se le imponían). El
+// modo reemplazo los vuelve a leer con el patrón de parseScript en
+// lib/pastedPiece.ts, que no admite comas ni dos puntos: un "Gancho: el dato
+// duro" dejaría de parsearse y se perdería ese bloque al editar a mano. Aquí se
+// sanean antes de guardar. Nunca lanza: si el modelo devuelve menos secciones
+// de las previstas, se guarda lo que haya.
+const SECCION_NO_VALIDO = /[^\p{Lu}\p{L} 0-9º·/()-]/gu;
+
+export function normalizeBeats(beats: unknown, fallbackNames: string[] = []): ScriptGen["beats"] {
+  const lista = Array.isArray(beats) ? (beats as ScriptGen["beats"]) : [];
+  return lista
+    .filter((b) => (b?.texto || "").trim())
+    .map((b, i) => {
+      const limpio = (b.seccion || "")
+        .replace(SECCION_NO_VALIDO, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 40)
+        .trim();
+      const seccion = limpio.length >= 2 ? limpio : fallbackNames[i] || `Sección ${i + 1}`;
+      return { ...b, seccion, texto: b.texto.trim() };
+    });
 }
