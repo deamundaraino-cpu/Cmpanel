@@ -4,7 +4,8 @@ import { statsSummary } from "@/lib/scoring";
 import { getSetting } from "@/lib/settings";
 import { briefCompleteness } from "@/lib/brand";
 import { getHealthScore } from "@/lib/health";
-import { formatBreakdown, dayOfWeekBreakdown } from "@/lib/metrics";
+import { formatBreakdown, dayOfWeekBreakdown, periodDelta } from "@/lib/metrics";
+import { ANALYSIS_PERIODS, parseAnalysisPeriod, periodBounds } from "@/lib/periods";
 import { requireClient } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
@@ -14,6 +15,8 @@ import HealthScoreCard from "@/components/HealthScoreCard";
 import PilarMixCard from "@/components/PilarMixCard";
 import Sparkline from "@/components/Sparkline";
 import PageHeader from "@/components/PageHeader";
+import PeriodSelector from "@/components/PeriodSelector";
+import DeltaTile from "@/components/charts/DeltaTile";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +30,35 @@ type Analysis = {
   acciones: string[];
   mejores_horas: string;
   formatos: string;
+  // Ausentes en diagnósticos antiguos, que analizaban todo el histórico.
+  periodo_dias?: number;
+  posts_analizados?: number;
 };
 
-export default async function Dashboard() {
+const sumReach = (ps: PostRow[]) => ps.reduce((a, p) => a + p.reach, 0);
+const meanEr = (ps: PostRow[]) => (ps.length ? ps.reduce((a, p) => a + p.er, 0) / ps.length : 0);
+
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
   const { clientId, clientNombre, onboarded } = await requireClient();
   if (!onboarded) redirect("/onboarding");
+  const days = parseAnalysisPeriod((await searchParams).days);
   const sql = getSql();
-  const { posts, totalReach, avgEr } = await statsSummary(clientId);
+  // La BrainCard describe todo lo que la IA conoce del cliente: histórico completo.
+  const { posts, avgEr } = await statsSummary(clientId);
   const winners = posts.filter((p) => p.is_winner);
+
+  // Cifras, top y diagnóstico: solo la ventana elegida, comparada con la anterior.
+  const { since, previousSince } = periodBounds(days);
+  const periodPosts = posts.filter((p) => p.timestamp && p.timestamp >= since);
+  const previousPosts = posts.filter(
+    (p) => p.timestamp && p.timestamp >= previousSince && p.timestamp < since
+  );
+  const periodWinners = periodPosts.filter((p) => p.is_winner).length;
+  const previousWinners = previousPosts.filter((p) => p.is_winner).length;
 
   // Contexto que la IA usa para este cliente (los "recibos" de la BrainCard).
   const [commentsRow] = await sql<{ n: number }[]>`
@@ -61,15 +85,7 @@ export default async function Dashboard() {
   `;
   const lastRec = recs[0];
   const analysis: Analysis | null = lastRec ? JSON.parse(lastRec.content) : null;
-  const top = [...posts].sort((a, b) => b.er - a.er).slice(0, 5);
-
-  const tiles = [
-    { label: "Seguidores", value: nf.format(followers) },
-    { label: "Posts analizados", value: nf.format(posts.length) },
-    { label: "Alcance acumulado", value: nf.format(totalReach) },
-    { label: "Engagement medio", value: pct(avgEr) },
-    { label: "Posts ganadores", value: nf.format(winners.length) },
-  ];
+  const top = [...periodPosts].sort((a, b) => b.er - a.er).slice(0, 5);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -87,7 +103,13 @@ export default async function Dashboard() {
               url="/api/sync"
               doneMessage="{synced} posts sincronizados"
             />
-            <ActionButton label="Analizar con IA" url="/api/analyze" variant="ghost" />
+            <ActionButton
+              label={`Analizar ${days} días con IA`}
+              url="/api/analyze"
+              body={{ days }}
+              variant="ghost"
+              doneMessage="Analizados {posts} posts"
+            />
           </>
         }
       />
@@ -116,13 +138,42 @@ export default async function Dashboard() {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">{t.label}</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{t.value}</p>
-          </div>
-        ))}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Rendimiento del periodo</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Últimos {days} días · comparado con los {days} días anteriores. El análisis con IA usa este mismo periodo.
+          </p>
+        </div>
+        <PeriodSelector basePath="/dashboard" periods={ANALYSIS_PERIODS} current={days} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-xs text-zinc-500">Seguidores</p>
+          <p className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{nf.format(followers)}</p>
+          <p className="mt-1 text-xs text-zinc-600">total actual</p>
+        </div>
+        <DeltaTile
+          label="Posts publicados"
+          value={nf.format(periodPosts.length)}
+          deltaPct={periodDelta(periodPosts.length, previousPosts.length)}
+        />
+        <DeltaTile
+          label="Alcance"
+          value={nf.format(sumReach(periodPosts))}
+          deltaPct={periodDelta(sumReach(periodPosts), sumReach(previousPosts))}
+        />
+        <DeltaTile
+          label="Engagement medio"
+          value={pct(meanEr(periodPosts))}
+          deltaPct={periodDelta(meanEr(periodPosts), meanEr(previousPosts))}
+        />
+        <DeltaTile
+          label="Posts ganadores"
+          value={nf.format(periodWinners)}
+          deltaPct={periodDelta(periodWinners, previousWinners)}
+        />
       </div>
 
       {snapshots.length >= 2 && (
@@ -143,9 +194,18 @@ export default async function Dashboard() {
               Diagnóstico de tu CM con IA
             </p>
             <p className="text-xs text-zinc-500">
+              {analysis.periodo_dias
+                ? `Últimos ${analysis.periodo_dias} días · ${analysis.posts_analizados} posts · `
+                : "Todo el histórico · "}
               {new Date(lastRec!.created_at).toLocaleString("es-ES")}
             </p>
           </div>
+          {analysis.periodo_dias !== days && (
+            <p className="mt-2 text-xs text-amber-400/80">
+              Este diagnóstico es de {analysis.periodo_dias ? `otro periodo (${analysis.periodo_dias} días)` : "todo el histórico"}.
+              Pulsa «Analizar {days} días con IA» para el periodo que estás viendo.
+            </p>
+          )}
           <p className="mt-2 text-sm text-zinc-300">{analysis.resumen}</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
@@ -175,7 +235,7 @@ export default async function Dashboard() {
 
       <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Top 5 por engagement</p>
+          <p className="text-sm font-medium">Top 5 por engagement · últimos {days} días</p>
           <Link href="/posts" className="text-xs text-indigo-400 hover:text-indigo-300">
             Ver todos →
           </Link>
@@ -198,7 +258,9 @@ export default async function Dashboard() {
           ))}
           {!top.length && (
             <li className="py-4 text-sm text-zinc-500">
-              Aún no hay posts. Sincroniza tu Instagram o carga datos demo en Ajustes.
+              {posts.length
+                ? `No hay posts en los últimos ${days} días. Prueba con un periodo más largo.`
+                : "Aún no hay posts. Sincroniza tu Instagram o carga datos demo en Ajustes."}
             </li>
           )}
         </ul>

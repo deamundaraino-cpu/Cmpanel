@@ -16,6 +16,8 @@ import LineChart from "@/components/charts/LineChart";
 import DeltaTile from "@/components/charts/DeltaTile";
 import Heatmap from "@/components/charts/Heatmap";
 import ReportPanel from "@/components/ReportPanel";
+import PeriodSelector from "@/components/PeriodSelector";
+import { METRICS_PERIODS, parseMetricsPeriod } from "@/lib/periods";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,7 @@ export default async function MetricsPage({
   searchParams: Promise<{ days?: string }>;
 }) {
   const sp = await searchParams;
-  const days = [7, 30, 90, 365].includes(Number(sp.days)) ? Number(sp.days) : 30;
+  const days = parseMetricsPeriod(sp.days);
   const { clientId } = await requireClient();
   const sql = getSql();
 
@@ -107,19 +109,7 @@ export default async function MetricsPage({
             Panel de control y seguimiento de tu presencia en Instagram.
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1">
-          {[7, 30, 90, 365].map((d) => (
-            <Link
-              key={d}
-              href={`/metricas?days=${d}`}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                d === days ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {d === 365 ? "1 año" : `${d} días`}
-            </Link>
-          ))}
-        </div>
+        <PeriodSelector basePath="/metricas" periods={METRICS_PERIODS} current={days} />
       </div>
 
       {alerts.length > 0 && (

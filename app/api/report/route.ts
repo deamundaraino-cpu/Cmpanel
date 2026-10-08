@@ -5,6 +5,7 @@ import { chatJson } from "@/lib/llm";
 import { buildBrandBrief } from "@/lib/brand";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getLeadWeeks } from "@/lib/leads";
+import { parseMetricsPeriod } from "@/lib/periods";
 
 export const maxDuration = 120;
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   const { userId, clientId } = auth;
   try {
     const { days } = await req.json().catch(() => ({ days: 30 }));
-    const periodDays = [7, 30, 90, 365].includes(Number(days)) ? Number(days) : 30;
+    const periodDays = parseMetricsPeriod(days);
     const sql = getSql();
     const since = new Date(Date.now() - periodDays * 86400_000).toISOString();
 
