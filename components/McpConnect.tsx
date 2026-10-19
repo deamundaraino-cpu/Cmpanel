@@ -97,7 +97,15 @@ export default function McpConnect() {
           <p className="text-xs font-medium text-emerald-300">
             Token creado. Cópialo ahora: por seguridad no se vuelve a mostrar.
           </p>
-          <Field label="claude.ai → Ajustes → Conectores → Añadir conector personalizado → URL:" value={created.url_claude_ai} />
+          <p className="mt-2 text-xs text-zinc-300">
+            claude.ai → Ajustes → Conectores → Añadir conector personalizado → «Sin inicio de sesión»:
+          </p>
+          <Field label="URL:" value={created.url_header} />
+          <Field label="Encabezados de solicitud → nombre: Authorization · valor:" value={`Bearer ${created.token}`} />
+          <details className="mt-2 text-xs text-zinc-500">
+            <summary className="cursor-pointer select-none">Alternativa: URL con el token incluido (sin encabezado)</summary>
+            <Field label="URL:" value={created.url_claude_ai} />
+          </details>
           <Field
             label="Claude Code (terminal):"
             value={`claude mcp add --transport http brandpanel ${created.url_header} --header "Authorization: Bearer ${created.token}"`}
