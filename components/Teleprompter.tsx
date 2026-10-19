@@ -8,7 +8,17 @@ export type PrompterScript = { itemId: number; titulo: string; bloques: string[]
  * Teleprompter a pantalla completa para grabar por lotes: solo el texto que se
  * dice, letra grande y desplazamiento automático.
  * Teclas: espacio = pausa/sigue · ↑/↓ = velocidad · ←/→ = pieza anterior/siguiente · Esc = salir.
+ * En tablet: tocar el texto = pausa/sigue, y la pantalla no se apaga mientras está abierto.
  */
+const PREFS_KEY = "bp-prompter";
+
+function loadPrefs(): { speed?: number; fontSize?: number; mirror?: boolean } {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
 export default function Teleprompter({
   scripts,
   onClose,
@@ -20,12 +30,41 @@ export default function Teleprompter({
 }) {
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(3); // 1-10
-  const [fontSize, setFontSize] = useState(44);
-  const [mirror, setMirror] = useState(false);
+  const [speed, setSpeed] = useState(() => loadPrefs().speed ?? 3); // 1-10
+  const [fontSize, setFontSize] = useState(() => loadPrefs().fontSize ?? 44);
+  const [mirror, setMirror] = useState(() => loadPrefs().mirror ?? false);
   const [done, setDone] = useState<Set<number>>(new Set());
   const scroller = useRef<HTMLDivElement>(null);
   const script = scripts[idx];
+
+  // Recuerda velocidad, tamaño y espejo entre sesiones (por dispositivo).
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ speed, fontSize, mirror }));
+    } catch {}
+  }, [speed, fontSize, mirror]);
+
+  // Evita que la tablet apague la pantalla mientras se lee.
+  useEffect(() => {
+    let lock: WakeLockSentinel | null = null;
+    const request = async () => {
+      try {
+        if ("wakeLock" in navigator && document.visibilityState === "visible") {
+          lock = await navigator.wakeLock.request("screen");
+        }
+      } catch {}
+    };
+    // El sistema suelta el bloqueo al cambiar de app: se pide otra vez al volver.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") request();
+    };
+    request();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      lock?.release().catch(() => {});
+    };
+  }, []);
 
   const go = useCallback(
     (to: number) => {
@@ -42,10 +81,16 @@ export default function Teleprompter({
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
+    // Posición con decimales: Safari redondea scrollTop y a poca velocidad
+    // (menos de 1px por fotograma) el texto no avanzaría nunca.
+    let pos = scroller.current?.scrollTop ?? 0;
     const tick = (now: number) => {
       const el = scroller.current;
       if (el) {
-        el.scrollTop += ((now - last) / 1000) * speed * 12;
+        // Si el usuario arrastró el texto con el dedo, se sigue desde ahí.
+        if (Math.abs(el.scrollTop - pos) > 2) pos = el.scrollTop;
+        pos += ((now - last) / 1000) * speed * 12;
+        el.scrollTop = pos;
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) setPlaying(false);
       }
       last = now;
@@ -84,7 +129,10 @@ export default function Teleprompter({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black text-white">
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2 text-sm">
+      <div
+        className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2 text-sm [&_button]:min-h-10 [&_button]:touch-manipulation"
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
         <span className="text-white/50 tabular-nums">
           {idx + 1}/{scripts.length}
         </span>
@@ -127,7 +175,11 @@ export default function Teleprompter({
         </button>
       </div>
 
-      <div ref={scroller} className="relative flex-1 overflow-y-auto">
+      <div
+        ref={scroller}
+        onClick={() => setPlaying((p) => !p)}
+        className="relative flex-1 cursor-pointer select-none overflow-y-auto"
+      >
         {/* Línea de lectura */}
         <div className="pointer-events-none sticky top-[30%] z-10 h-0 border-t border-indigo-500/60" />
         <div
@@ -141,8 +193,11 @@ export default function Teleprompter({
           ))}
         </div>
       </div>
-      <p className="border-t border-white/10 px-4 py-1.5 text-center text-xs text-white/40">
-        Espacio: pausa · ↑↓: velocidad · ←→: pieza · Esc: salir
+      <p
+        className="border-t border-white/10 px-4 py-1.5 text-center text-xs text-white/40"
+        style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
+      >
+        Toca el texto para pausar o seguir · Teclado: espacio, ↑↓ velocidad, ←→ pieza, Esc salir
       </p>
     </div>
   );
