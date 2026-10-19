@@ -146,6 +146,11 @@ function repairPrompt(gen: unknown, violations: Violation[]): string {
   )}\n\nIncumplimientos y su motivo (corrígelos TODOS, incluidas sus variantes; no basta con cambiar la palabra si la idea sigue prohibida):\n${lista}\n\nDevuelve EXACTAMENTE la misma estructura JSON, con los mismos campos y la misma cantidad de elementos, cambiando solo lo necesario para cumplir. No añadas comentarios.`;
 }
 
+/** Todas las infracciones de una pieza: reglas de la marca, estructura y chequeos extra. */
+export function checkPiece(gen: unknown, rules: BannedRule[], extraChecks: ((g: unknown) => Violation[])[] = []): Violation[] {
+  return [...findViolations(JSON.stringify(gen), rules), ...structuralViolations(gen), ...extraChecks.flatMap((f) => f(gen))];
+}
+
 /**
  * Revisa la pieza generada y, si incumple, pide reescrituras explicando la
  * regla violada (el modelo no sabe POR QUÉ algo está prohibido). Los críticos
@@ -162,11 +167,7 @@ export async function enforceBrandRules<T>(
    */
   extraChecks: ((g: unknown) => Violation[])[] = []
 ): Promise<{ gen: T; violations: Violation[]; blocked: boolean }> {
-  const check = (g: unknown): Violation[] => [
-    ...findViolations(JSON.stringify(g), rules),
-    ...structuralViolations(g),
-    ...extraChecks.flatMap((f) => f(g)),
-  ];
+  const check = (g: unknown): Violation[] => checkPiece(g, rules, extraChecks);
 
   let best = gen;
   let violations = check(gen);

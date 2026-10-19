@@ -9,6 +9,7 @@
     "test": "for f in scripts/test-*.mjs; do echo \"— $f\"; npx tsx \"$f\" || exit 1; done"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
     "jsonrepair": "^3.15.0",
@@ -17,7 +18,8 @@
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

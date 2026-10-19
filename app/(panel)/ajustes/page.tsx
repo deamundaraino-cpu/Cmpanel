@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SettingsForm from "@/components/SettingsForm";
 import ActionButton from "@/components/ActionButton";
+import McpConnect from "@/components/McpConnect";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +11,18 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
         Conecta el Instagram del CLIENTE ACTIVO y gestiona tus copias de
-        seguridad. La IA ya viene incluida. Para la identidad, el cliente ideal
+        seguridad. Para generar contenido, conecta Claude (abajo); la IA
+        interna del panel queda como respaldo. Para la identidad, el cliente ideal
         y la estrategia de contenido de este cliente, ve a{" "}
         <Link href="/marca" className="text-indigo-400 hover:text-indigo-300">
           🧠 Marca
         </Link>
         .
       </p>
+
+      <div className="mt-6">
+        <McpConnect />
+      </div>
 
       <div className="mt-6">
         <SettingsForm />

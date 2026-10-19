@@ -53,14 +53,18 @@ export async function recomputeScores(clientId: number): Promise<{ scored: numbe
     return { id: p.id, er: p.er, score, is_winner: isWinner, perf_ratio: perfRatio };
   });
 
-  await sql.begin(async (tx) => {
-    for (const u of updates) {
-      await tx`
-        UPDATE posts SET er = ${u.er}, score = ${u.score}, is_winner = ${u.is_winner}, perf_ratio = ${u.perf_ratio}
-        WHERE client_id = ${clientId} AND id = ${u.id}
-      `;
-    }
-  });
+  // Un solo UPDATE para todos los posts: antes iba uno por uno (80+ viajes a
+  // la BD, ~20 s) y frenaba la sincronización y el análisis.
+  await sql`
+    UPDATE posts AS p SET
+      er = u.er::double precision,
+      score = u.score::double precision,
+      is_winner = u.is_winner::integer,
+      perf_ratio = NULLIF(u.perf_ratio, '')::double precision
+    FROM (VALUES ${sql(updates.map((u) => [u.id, String(u.er), String(u.score), String(u.is_winner), u.perf_ratio === null ? "" : String(u.perf_ratio)]))})
+      AS u(id, er, score, is_winner, perf_ratio)
+    WHERE p.client_id = ${clientId} AND p.id = u.id
+  `;
 
   // Este es el momento exacto en que un post "se vuelve" ganador: archivar aquí
   // el gancho evita depender de que alguien abra una pantalla concreta.

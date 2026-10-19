@@ -72,6 +72,22 @@ CREATE TABLE IF NOT EXISTS ai_usage (
   PRIMARY KEY (user_id, date, kind)
 );
 
+-- ————— Conector MCP (Claude) —————
+-- Tokens personales para que Claude (claude.ai o Claude Code) lea y escriba en
+-- la plataforma en nombre del editor. Solo se guarda el hash del token.
+
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  nombre TEXT,
+  prefijo TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT
+);
+
+ALTER TABLE mcp_tokens ENABLE ROW LEVEL SECURITY;
+
 -- ————— Datos por cliente —————
 
 CREATE TABLE IF NOT EXISTS settings (
